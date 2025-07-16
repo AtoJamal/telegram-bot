@@ -1,0 +1,215 @@
+Now, let's go through each collection and provide the correct Firestore data type for each field, optimizing for querying, storage efficiency, and data integrity.
+
+Firestore Data Type Redesign for Ethio-Egzam Database
+1. users Collection (Proposed Central User Management)
+
+
+Collection Name: users
+
+Document ID: User's Firebase Authentication UID (e.g., s9df8G...)
+
+JSON
+
+// Document ID: firebase_auth_uid_ABC
+{
+  "email": "user@example.com",     // String (NOT NULL, UNIQUE for email)
+  "firstName": "John",              // String
+  "middleName": "Michael",          // String (NULL if not applicable)
+  "lastName": "Doe",                // String
+  "roles": ["candidate"],           // Array<String> (e.g., ["candidate", "admin", "designer"])
+  "isActive": true,                 // Boolean (Default: true)
+  "createdAt": "2024-07-11T05:45:00Z", // Timestamp (Firestore's native Timestamp type is preferred over String for date/time)
+  "lastLoginAt": "2025-07-11T05:45:00Z" // Timestamp (NULL until first login after creation)
+}
+2. admins Collection
+Collection Name: admins
+
+Document ID: Corresponding users document's UID (e.g., s9df8G...)
+
+JSON
+
+// Document ID: firebase_auth_uid_admin_XYZ
+{
+
+  "user_id": "firebase_auth_uid_admin_XYZ", // String (matches Document ID, for clarity/querying)
+  "adminLevel": "superAdmin",             // String (e.g., "super_admin", "content_admin")
+}
+3. designers Collection
+Collection Name: designers
+
+Document ID: Corresponding users document's UID (e.g., s9df8G...)
+
+JSON
+
+// Document ID: firebase_auth_uid_designer_ABC
+{
+
+  "user_id": "firebase_auth_uid_designer_ABC", // String (matches Document ID, for clarity/querying)
+  "specialization": ["UI/UX Design", "Graphic Design"], // Array<String>
+  "isAvailable": true,                     // Boolean
+  "assignedOrders": ["orderId1", "orderId2"], // Array<String> (IDs of orders currently assigned)
+                                              // Alternatively, use a subcollection `designerOrders` if order details are needed directly here.
+                                              // Storing just IDs here is a good approach to avoid duplicating order data.
+  "lastAssignedOrderAt": "2025-07-10T10:00:00Z", // Timestamp (optional, for tracking workload)
+  "portfolioUrl": "https://designer.com/portfolio" // String (URL)
+}
+4. orders Collection
+Collection Name: orders
+
+Document ID: Auto-generated ID (Firestore automatically creates a unique ID like order_ghj789)
+
+JSON
+
+// Document ID: order_ID_123
+{
+  "candidateId": "firebase_auth_uid_candidate_MNO", // String (Link to 'users' and 'candidates' collection)
+  "designerId": "firebase_auth_uid_designer_ABC",   // String (Link to 'users' and 'designers' collection, NULL initially if unassigned)
+  "templateId": "template_ID_XYZ",                  // String (Link to 'templates' collection)
+  "deliveryDate": "2025-07-15T17:00:00Z",           // Timestamp (Expected delivery date/time)
+  "finalCvUrl": "https://egzam.com/cvs/final_cv_abc.pdf", // String (URL, NULL until completed)
+  "orderedAt": "2025-07-11T05:45:00Z",              // Timestamp (When the order was placed)
+  "paymentVerified": false,                         // Boolean
+  "status": "pending",                              // String (e.g., "pending", "assigned", "in_progress", "awaiting_review", "completed", "cancelled")
+  "notes": "Candidate requested minimalist style.", // String (Optional)
+  "lastStatusUpdate": "2025-07-11T05:45:00Z"       // Timestamp
+}
+5. templates Collection
+Collection Name: templates
+
+Document ID: Auto-generated ID (e.g., template_ID_XYZ) or a meaningful ID if known (e.g., modern-blue-template)
+
+JSON
+
+// Document ID: template_ID_XYZ
+{
+  "canvaLink": "https://www.canva.com/templates/TA_design123", // String (URL to editable template in Canva or similar)
+  "thumbnailUrl": "https://egzam.com/thumbnails/temp_xyz.jpg", // String (URL for preview image)
+  "isActive": true                                           // Boolean
+}
+6. candidates Collection (CV Data)
+Collection Name: candidates
+
+Document ID: User's Firebase Authentication UID (e.g., s9df8G...). This makes it a 1-to-1 mapping with the users document and provides direct access to their CV data.
+
+JSON
+
+// Document ID: firebase_auth_uid_candidate_MNO
+{
+  "firstName": "Jane",              // String
+  "middleName": "Lynn",             // String (NULL if not applicable)
+  "lastName": "Smith",              // String
+  "phoneNumber": "+251912345678", // String (e.g., "+251 912 345678" - E.164 format recommended)
+  "emailAddress": "jane.smith@example.com", // String (redundant if also in 'users' but useful for direct access)
+  "linkedinProfile": "https://www.linkedin.com/in/janesmith", // String (URL, NULL if not provided)
+  "city": "Addis Ababa",           // String
+  "country": "Ethiopia",           // String
+  "profileUrl": "https://egzam.com/photos/jane_smith.jpg", // String (URL, NULL if not provided)
+  "availability": "2 weeks notice", // String (e.g., "Immediately", "2 weeks notice", "Negotiable")
+  "lastUpdatedAt": "2025-07-11T05:45:00Z" // Timestamp (tracks last modification to candidate's main profile or any subcollection)
+}
+Subcollections within candidates/{candidate_id}:
+careerObjectives (Collection)
+
+Document ID: Auto-generated ID
+
+Fields:
+
+JSON
+
+{ "summaryText": "Motivated software engineer..." } // String
+workExperiences (Collection)
+
+Document ID: Auto-generated ID
+
+Fields:
+
+JSON
+
+{
+  "jobTitle": "Software Engineer", // String
+  "companyName": "EthioTech Solutions", // String
+  "location": "Mekele, Ethiopia",    // String
+  "startDate": "2020-03-01",        // Timestamp
+  "endDate": "2024-06-30",          // Timestamp (NULL if current)
+  "description": "• Developed features...\n• Optimized performance..." // String
+}
+education (Collection)
+
+Document ID: Auto-generated ID
+
+Fields:
+
+JSON
+
+{
+  "degreeName": "BSc in Computer Science", // String
+  "institutionName": "Mekelle University", // String
+  "startDate": "2016-09-01",          // Timestamp
+  "endDate": "2020-07-15",            // Timestamp (NULL if ongoing)
+  "gpa": "3.8/4.0",             // String (or Number if strictly numeric)
+  "achievementsHonors": "Dean's List 3 times" // String
+}
+skills (Collection)
+
+Document ID: Auto-generated ID (or skill name if you want to enforce unique skill entries per candidate)
+
+Fields:
+
+JSON
+
+{
+  "skillName": "Python", // String
+  "category": "Programming Language", // String (optional)
+  "proficiency": "Advanced" // String (e.g., "Beginner", "Intermediate", "Advanced", "Expert")
+}
+certificationsAwards (Collection)
+
+Document ID: Auto-generated ID
+
+Fields:
+
+JSON
+
+{
+  "certificateName": "Google Project Management Certificate", // String
+  "issuer": "Coursera",                                     // String
+  "yearIssued": 2023                                       // Number (Integer)
+}
+projects (Collection)
+
+Document ID: Auto-generated ID
+
+Fields:
+
+JSON
+
+{
+  "projectTitle": "Ethio-Egzam Platform Backend", // String
+  "description": "Developed the backend for the Ethio-Egzam platform using Node.js and Express.", // String
+  "technologiesUsed": ["Node.js", "Express", "MongoDB", "Firebase"], // Array<String>
+  "projectLink": "https://github.com/jane_smith/ethio-egzam-backend" // String (URL)
+}
+languages (Collection)
+
+Document ID: Auto-generated ID (or language name if unique per candidate)
+
+Fields:
+
+JSON
+
+{
+  "languageName": "Amharic",    // String
+  "proficiencyLevel": "Native" // String (e.g., "Native", "Fluent", "Intermediate", "Basic")
+}
+otherActivities (Collection)
+
+Document ID: Auto-generated ID
+
+Fields:
+
+JSON
+
+{
+  "activityType": "Volunteering", 
+  "description": "Mentored students in coding club at local school." 
+}
