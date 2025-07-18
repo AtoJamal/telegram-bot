@@ -30,15 +30,17 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import django
 from typing import Dict, List
+import asyncio
 
 # Ensure Python version is 3.6 or higher
 import sys
 
+# PROMPTS dictionary (no changes needed, only relevant keys shown for reference)
 PROMPTS = {
     'en': {
         'welcome_new': "Welcome to the CV Bot! Let's create your professional CV.\n\nPlease enter your first name:",
         'welcome_back': "Welcome back! You already have a profile. Would you like to update your information or create a new CV?",
-        'select_language': "Please select your preferred language:",
+        'select_language': "Please select your preferred language:\nእባክዎ የሚፈልጉትን ቋንቋ ይምረጡ፡",
         'update_profile': "Update Profile",
         'new_cv': "Create New CV",
         'edit_section': "Which section would you like to update?",
@@ -107,7 +109,7 @@ PROMPTS = {
         'summary_languages': "Languages",
         'confirm': "✅ Confirm",
         'edit': "✏️ Edit",
-        'payment_instructions': "Please make a payment of 100 Birr to:\n\nBank: Commercial Bank of Ethiopia\nAccount: 1000123456789\nName: CV Bot Service\n\nAfter payment, please upload a screenshot of the payment confirmation.",
+        'payment_instructions': "Please make a payment of 100 Birr to:\n\nBank: Commercial Bank of Ethiopia\nAccount: 1000649561382\nName: Jemal Hussen Hassen\n\nAfter payment, please upload a screenshot of the payment confirmation.",
         'payment_confirmation': "Thank you! Your payment is being processed. We will notify you once it's verified. Please come back later.",
         'cancel_message': "Operation cancelled. Type /start to begin again.",
         'help_message': "Use /start to create or update your CV profile.\nUse /cancel to stop the current operation.",
@@ -119,12 +121,14 @@ PROMPTS = {
         'profile_image_skip': "Profile image skipped. Proceed to professional information?",
         'continue_professional': "Continue to Professional Info",
         'payment_instructions': "Please make a payment of 100 Birr to:\n\nBank: Commercial Bank of Ethiopia\nAccount: 1000123456789\nName: CV Bot Service\n\nAfter payment, please upload a screenshot of the payment confirmation (JPG, JPEG, PNG, PDF only, max 5 MB). Note: DOC, DOCX, and similar formats are not supported.",
-        'payment_screenshot_success': "Payment screenshot uploaded successfully. Awaiting verification."
+        'payment_screenshot_success': "Payment screenshot uploaded successfully. Awaiting verification.",
+        'payment_verified': "Your payment has been verified! Your CV is being processed.",
+        'payment_rejected': "Your payment was rejected: {reason}. Please start a new order with /start."
     },
     'am': {
         'welcome_new': "ወደ CV ቦት እንኳን በደህና መጡ! የፕሮፌሽናል ሲቪዎን እንፍጠር።\n\nእባክዎ የመጀመሪያ ስምዎን ያስገቡ፡",
         'welcome_back': "እንኳን ተመልሰው መጡ! ቀድሞ ፕሮፋይል አለዎት። መረጃዎን ማዘመን ወይም አዲስ ሲቪ መፍጠር ይፈልጋሉ?",
-        'select_language': "እባክዎ የሚመርጡትን ቋንቋ ይምረጡ፡",
+        'select_language': "እባክዎ የሚፈልጉትን ቋንቋ ይምረጡ፡\nPlease select your preferred language:",
         'update_profile': "ፕሮፋይል አዘምን",
         'new_cv': "አዲስ ሲቪ ፍጠር",
         'edit_section': "የትኛውን ክፍል ማዘመን ይፈልጋሉ?",
@@ -204,8 +208,10 @@ PROMPTS = {
         'file_too_large': "ፋይሉ በጣም ትልቅ ነው። እባክዎ ከ5 ሜባ በታች ያለ ምስል ወይም ፋይል ይስቀሉ።",
         'profile_image_skip': "የፕሮፋይል ምስል ተዘልሏል። ወደ ሙያዊ መረጃ መቀጠል?",
         'continue_professional': "ወደ ሙያዊ መረጃ ቀጥል",
-        'payment_instructions': "እባክዎ 100 ብር ይክፈሉ፡\n\nባንክ፡ የኢትዮጵያ ንግድ ባንክ\nመለያ፡ 1000123456789\nስም፡ CV ቦት አገልግሎት\n\nክፍያ ከፈጸሙ በኋላ፣ እባክዎ የክፍያ ማረጋገጫ ፎቶ (JPG, JPEG, PNG, PDF ብቻ፣ ከፍተኛ 5 ሜባ) ይስቀሉ። ማሳሰቢያ፡ DOC, DOCX እና ተመሳሳይ ቅርጸቶች አይደገፉም።",
-        'payment_screenshot_success': "የክፍያ ማረጋገጫ ፎቶ በተሳካ ሁኔታ ተሰቅሏል። ማረጋገጫ በመጠበቅ ላይ።"
+        'payment_instructions': "እባክዎ 100 ብር ይክፈሉ፡\n\nባንክ፡ የኢትዮጵያ ንግድ ባንክ\nመለያ፡ 1000649561382\nስም፡ Jemal Hussen Hassen\n\nክፍያ ከፈጸሙ በኋላ፣ እባክዎ የክፍያ ማረጋገጫ ፎቶ (JPG, JPEG, PNG, PDF ብቻ፣ ከፍተኛ 5 ሜባ) ይስቀሉ። ማሳሰቢያ፡ DOC, DOCX እና ተመሳሳይ ቅርጸቶች አይደገፉም።",
+        'payment_screenshot_success': "የክፍያ ማረጋገጫ ፎቶ በተሳካ ሁኔታ ተሰቅሏል። ማረጋገጫ በመጠበቅ ላይ።",
+        'payment_verified': "ክፍያዎ ተረጋግጧል! ሲቪዎ በመዘጋጀት ላይ ነው።",
+        'payment_rejected': "ክፍያዎ ተቀባይነት አላገኘም፡ {reason}። እባክዎ ከ/start ጋር አዲስ ትዕዛዝ ይጀምሩ።"
     }
 }
 
@@ -260,10 +266,14 @@ logger = logging.getLogger(__name__)
 
 class CVBot:
     def __init__(self, token: str):
-        self.application = Application.builder().token(token).read_timeout(30).write_timeout(30).connect_timeout(30).build()
+        self.application = Application.builder().token(token).read_timeout(30).write_timeout(30).connect_timeout(30).post_init(self.post_init).build()
         self.user_sessions: Dict[str, Dict] = {}  # Dictionary to store user-specific data
         self.setup_handlers()
-        
+
+    async def post_init(self, application: Application) -> None:
+        """Called after application initialization to start background tasks"""
+        self.start_background_tasks()
+
     def setup_handlers(self) -> None:
         """Set up conversation handlers for the bot"""
         conv_handler = ConversationHandler(
@@ -336,8 +346,45 @@ class CVBot:
         
         self.application.add_handler(conv_handler)
         self.application.add_handler(CommandHandler("help", self.help_command))
+        self.application.add_handler(MessageHandler(filters.Chat(int(private_channel_id)) & filters.REPLY, self.handle_admin_reply))
+        self.application.add_handler(MessageHandler(filters.Chat(int(private_channel_id)) & ~filters.REPLY, self.ignore_non_reply_messages))
         self.application.add_error_handler(self.error_handler)
 
+    def start_background_tasks(self) -> None:
+        """Start background tasks for polling order status changes"""
+        self.application.create_task(self.poll_order_status_changes())
+
+    async def poll_order_status_changes(self) -> None:
+        """Poll Firestore for order status changes and send notifications"""
+        while True:
+            try:
+                for telegram_id, session in list(self.user_sessions.items()):
+                    if 'order_id' not in session or 'chat_id' not in session:
+                        logger.debug(f"Skipping session for telegram_id {telegram_id}: missing order_id or chat_id")
+                        continue
+                    order = Order.get_by_id(session['order_id'])
+                    if not order:
+                        logger.debug(f"Order {session['order_id']} not found for telegram_id {telegram_id}")
+                        continue
+                    if order.status in ['verified', 'rejected'] and not session.get('notified', False):
+                        if order.status == 'verified':
+                            await self.application.bot.send_message(
+                                chat_id=session['chat_id'],
+                                text=self.get_prompt(session, 'payment_verified')
+                            )
+                            logger.info(f"Sent payment verified notification to chat_id {session['chat_id']} for order {session['order_id']}")
+                        elif order.status == 'rejected':
+                            reason = order.statusDetails or "No reason provided"
+                            await self.application.bot.send_message(
+                                chat_id=session['chat_id'],
+                                text=self.get_prompt(session, 'payment_rejected').format(reason=reason)
+                            )
+                            logger.info(f"Sent payment rejected notification to chat_id {session['chat_id']} for order {session['order_id']}")
+                        session['notified'] = True
+            except Exception as e:
+                logger.error(f"Error in poll_order_status_changes: {str(e)}")
+            await asyncio.sleep(300)  # Poll every 5 minutes
+    
     def get_user_session(self, user_id: str) -> dict:
         """Get or create a user session"""
         if user_id not in self.user_sessions:
@@ -370,12 +417,11 @@ class CVBot:
         """Send welcome message and prompt for language selection"""
         user = update.effective_user
         telegram_id = str(user.id)
-        
-        # Initialize user session
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id  # Store chat ID for notifications
         
         await update.message.reply_text(
-            PROMPTS['en']['select_language'],  # Always show language selection in English for simplicity
+            PROMPTS['en']['select_language'],
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("English", callback_data="lang_en")],
                 [InlineKeyboardButton("አማርኛ (Amharic)", callback_data="lang_am")]
@@ -390,10 +436,10 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = query.message.chat_id  # Store chat ID
         
-        session['language'] = query.data.split('_')[1]  # Set language ('en' or 'am')
+        session['language'] = query.data.split('_')[1]
         
-        # Check if candidate exists
         candidate = Candidate.get_by_telegram_user_id(telegram_id)
         if candidate:
             await query.edit_message_text(
@@ -418,14 +464,13 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = query.message.chat_id
         
         if query.data == "update_profile":
-            # Load existing profile data
             candidate = Candidate.get_by_telegram_user_id(telegram_id)
             session['candidate_data'] = candidate.to_dict()
             session['candidate_data']['availability'] = session['candidate_data'].get('availability', 'To be specified')
             
-            # Load all subcollections
             manager = CandidateManager(candidate.uid)
             profile = manager.get_complete_profile()
             
@@ -471,6 +516,7 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'firstName':
@@ -494,6 +540,7 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'phoneNumber':
@@ -527,9 +574,10 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         
         if update.message.text and update.message.text.lower() == 'skip':
-            session['candidate_data']['profileUrl'] = None  # Clear profileUrl if skipped
+            session['candidate_data']['profileUrl'] = None
             await update.message.reply_text(
                 self.get_prompt(session, 'profile_image_skip'),
                 reply_markup=InlineKeyboardMarkup([
@@ -538,7 +586,7 @@ class CVBot:
             )
             return COLLECT_PROFILE_IMAGE
         
-        max_size = 5 * 1024 * 1024  # 5 MB
+        max_size = 5 * 1024 * 1024
         allowed_mime_types = ['image/jpeg', 'image/png', 'application/pdf']
         allowed_extensions = ['jpg', 'jpeg', 'png', 'pdf']
         
@@ -551,9 +599,7 @@ class CVBot:
                 if file.file_size > max_size:
                     await update.message.reply_text(self.get_prompt(session, 'file_too_large'))
                     return COLLECT_PROFILE_IMAGE
-                # Store the file URL
                 session['candidate_data']['profileUrl'] = file.file_path
-                # Forward the photo to the private channel
                 await update.message.copy(
                     chat_id=private_channel_id,
                     caption=caption
@@ -573,10 +619,8 @@ class CVBot:
                         return COLLECT_PROFILE_IMAGE
                 else:
                     extension = 'pdf' if document.mime_type == 'application/pdf' else 'jpg'
-                # Store the file URL
                 file = await document.get_file()
                 session['candidate_data']['profileUrl'] = file.file_path
-                # Forward the document to the private channel
                 await update.message.copy(
                     chat_id=private_channel_id,
                     caption=caption
@@ -604,6 +648,7 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = query.message.chat_id
         
         if query.data == "continue_professional":
             session['current_field'] = 'work_jobTitle'
@@ -616,6 +661,7 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'work_jobTitle':
@@ -653,6 +699,7 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = query.message.chat_id
         
         if query.data == "add_another_work":
             session['current_field'] = 'work_jobTitle'
@@ -669,6 +716,7 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'edu_degreeName':
@@ -711,6 +759,7 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = query.message.chat_id
         
         if query.data == 'add_another_edu':
             session['current_field'] = 'edu_degreeName'
@@ -727,6 +776,7 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'skill_skillName':
@@ -754,6 +804,7 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = query.message.chat_id
         
         if query.data == "add_another_skill":
             session['current_field'] = 'skill_skillName'
@@ -768,6 +819,7 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         
         session['career_objectives'].append({
             'summaryText': update.message.text
@@ -783,6 +835,7 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'cert_certificateName':
@@ -810,6 +863,7 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = query.message.chat_id
         
         if query.data == "add_another_cert":
             session['current_field'] = 'cert_certificateName'
@@ -826,6 +880,7 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'project_projectTitle':
@@ -859,6 +914,7 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = query.message.chat_id
         
         if query.data == "add_another_project":
             session['current_field'] = 'project_projectTitle'
@@ -875,6 +931,7 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'lang_languageName':
@@ -902,6 +959,7 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = query.message.chat_id
         
         if query.data == "add_another_language":
             session['current_field'] = 'lang_languageName'
@@ -916,13 +974,13 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         
         session['activities'].append({
             'activityType': 'Other',
             'description': update.message.text
         })
         
-        # Show summary of all collected information
         summary = self.get_prompt(session, 'summary_header')
         summary += f"{self.get_prompt(session, 'summary_name')}: {session['candidate_data'].get('firstName', '')} {session['candidate_data'].get('middleName', '')} {session['candidate_data'].get('lastName', '')}\n"
         
@@ -982,9 +1040,9 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = query.message.chat_id
         
         if query.data == "confirm_yes":
-            # Create or update candidate
             candidate = Candidate.get_by_telegram_user_id(telegram_id)
             if not candidate:
                 candidate = Candidate(
@@ -994,12 +1052,10 @@ class CVBot:
                 )
                 candidate.save()
             else:
-                # Update existing candidate
                 for key, value in session['candidate_data'].items():
                     setattr(candidate, key, value)
                 candidate.save()
             
-            # Save all subcollections
             for work_exp in session['work_experiences']:
                 WorkExperience(
                     candidate_uid=candidate.uid,
@@ -1048,7 +1104,6 @@ class CVBot:
                     **activity
                 ).save()
             
-            # Create order
             order = Order(
                 id=str(uuid.uuid4()),
                 candidateId=candidate.uid,
@@ -1057,10 +1112,9 @@ class CVBot:
             )
             order.save()
             
-            # Store order ID in session
             session['order_id'] = order.id
+            session['notified'] = False  # Reset notification flag for new order
             
-            # Send payment instructions
             await query.edit_message_text(self.get_prompt(session, 'payment_instructions'))
             return PAYMENT
         else:
@@ -1077,6 +1131,7 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = query.message.chat_id
         
         if query.data == "edit_personal":
             session['current_field'] = 'firstName'
@@ -1138,12 +1193,13 @@ class CVBot:
         """Handle payment screenshot upload"""
         telegram_id = str(update.effective_user.id)
         session = self.get_user_session(telegram_id)
+        session['chat_id'] = update.effective_chat.id
         
-        max_size = 5 * 1024 * 1024  # 5 MB
+        max_size = 5 * 1024 * 1024
         allowed_mime_types = ['image/jpeg', 'image/png', 'application/pdf']
         allowed_extensions = ['jpg', 'jpeg', 'png', 'pdf']
         
-        caption = f"Payment Screenshot - Name: {session['candidate_data'].get('firstName', '')} {session['candidate_data'].get('lastName', '')}, Phone: {session['candidate_data'].get('phoneNumber', '')}"
+        caption = f"Payment Screenshot - Order ID: {session['order_id']} - Name: {session['candidate_data'].get('firstName', '')} {session['candidate_data'].get('lastName', '')}, Phone: {session['candidate_data'].get('phoneNumber', '')}"
         
         try:
             if update.message.photo:
@@ -1152,9 +1208,7 @@ class CVBot:
                 if file.file_size > max_size:
                     await update.message.reply_text(self.get_prompt(session, 'file_too_large'))
                     return PAYMENT
-                # Store the file URL
                 file_url = file.file_path
-                # Forward the photo to the private channel
                 await update.message.copy(
                     chat_id=private_channel_id,
                     caption=caption
@@ -1174,10 +1228,8 @@ class CVBot:
                         return PAYMENT
                 else:
                     extension = 'pdf' if document.mime_type == 'application/pdf' else 'jpg'
-                # Store the file URL
                 file = await document.get_file()
                 file_url = file.file_path
-                # Forward the document to the private channel
                 await update.message.copy(
                     chat_id=private_channel_id,
                     caption=caption
@@ -1187,16 +1239,17 @@ class CVBot:
                 return PAYMENT
             
             order = Order.get_by_id(session['order_id'])
+            if not order:
+                logger.error(f"Order {session['order_id']} not found for telegram_id {telegram_id}")
+                await update.message.reply_text(self.get_prompt(session, 'error_message'))
+                return PAYMENT
+            
             order.paymentScreenshotUrl = file_url
-            order.update_status("pending_verification")
+            order.update_status("pending_verification", status_details="Payment screenshot submitted, awaiting admin verification")
             order.save()
             
             await update.message.reply_text(self.get_prompt(session, 'payment_screenshot_success'))
             await update.message.reply_text(self.get_prompt(session, 'payment_confirmation'))
-            
-            # Clear user session
-            if telegram_id in self.user_sessions:
-                del self.user_sessions[telegram_id]
             
             return ConversationHandler.END
         except Exception as e:
@@ -1204,12 +1257,83 @@ class CVBot:
             await update.message.reply_text(self.get_prompt(session, 'error_message'))
             return PAYMENT
 
+    async def handle_admin_reply(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle admin replies in the private channel to approve or reject payments"""
+        if not update.message or not update.message.chat_id:
+            logger.debug("Ignoring update with no message or chat_id")
+            return
+        
+        if str(update.message.chat_id) != private_channel_id:
+            logger.debug(f"Ignoring message from chat_id {update.message.chat_id}, expected {private_channel_id}")
+            return
+        
+        reply_text = update.message.text.lower() if update.message.text else ""
+        if not (reply_text.startswith('approve') or reply_text.startswith('reject:')):
+            logger.debug(f"Ignoring reply with text: {reply_text}")
+            return
+        
+        try:
+            if not update.message.reply_to_message or not update.message.reply_to_message.caption:
+                logger.debug("Ignoring reply with no valid reply_to_message or caption")
+                return
+            
+            caption = update.message.reply_to_message.caption
+            if not caption.startswith('Payment Screenshot - Order ID:'):
+                logger.debug(f"Ignoring reply with invalid caption: {caption}")
+                return
+            
+            # Extract order_id more robustly
+            try:
+                order_id = caption.split('Order ID: ')[1].split(' - ')[0].strip()
+            except IndexError:
+                logger.error(f"Failed to parse order_id from caption: {caption}")
+                return
+            
+            order = Order.get_by_id(order_id)
+            if not order:
+                logger.error(f"Order {order_id} not found")
+                return
+            
+            telegram_id = order.telegramUserId
+            session = self.get_user_session(telegram_id)
+            if 'chat_id' not in session:
+                logger.error(f"No chat_id found for telegram_id {telegram_id} in session")
+                return
+            
+            if reply_text == 'approve':
+                order.approve_payment()
+                logger.info(f"Order {order_id} approved: paymentVerified={order.paymentVerified}, status={order.status}, statusDetails={order.statusDetails}")
+                if not session.get('notified', False):
+                    await self.application.bot.send_message(
+                        chat_id=session['chat_id'],
+                        text=self.get_prompt(session, 'payment_verified')
+                    )
+                    logger.info(f"Sent immediate payment verified notification to chat_id {session['chat_id']} for order {order_id}")
+                    session['notified'] = True
+            elif reply_text.startswith('reject:'):
+                reason = reply_text[7:].strip() or 'No reason provided'
+                order.reject_payment(reason)
+                logger.info(f"Order {order_id} rejected: paymentVerified={order.paymentVerified}, status={order.status}, statusDetails={order.statusDetails}")
+                if not session.get('notified', False):
+                    await self.application.bot.send_message(
+                        chat_id=session['chat_id'],
+                        text=self.get_prompt(session, 'payment_rejected').format(reason=reason)
+                    )
+                    logger.info(f"Sent immediate payment rejected notification to chat_id {session['chat_id']} for order {order_id}")
+                    session['notified'] = True
+        
+        except Exception as e:
+            logger.error(f"Error in handle_admin_reply: {str(e)}")
+
+    async def ignore_non_reply_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Ignore non-reply messages in the private channel"""
+        logger.debug(f"Ignoring non-reply message in private channel: {update.message.text if update.message.text else 'No text'}")
+
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Cancel the current conversation"""
         telegram_id = str(update.effective_user.id)
         session = self.get_user_session(telegram_id)
         
-        # Clear user session
         if telegram_id in self.user_sessions:
             del self.user_sessions[telegram_id]
         
@@ -1226,10 +1350,12 @@ class CVBot:
         """Log errors and handle connection issues"""
         logger.error(msg="Exception while handling update:", exc_info=context.error)
         
-        if update and update.effective_message:
+        if update and update.effective_message and update.effective_user:
             telegram_id = str(update.effective_user.id)
             session = self.get_user_session(telegram_id)
             await update.effective_message.reply_text(self.get_prompt(session, 'error_message'))
+        else:
+            logger.debug("No effective message or user available to send error message")
 
 def main() -> None:
     """Run the bot"""

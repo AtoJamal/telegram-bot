@@ -249,18 +249,20 @@ class Order(BaseFirestoreModel):
     
     STATUS_CHOICES = [
         ('pending', 'Pending'),
-        ('awaitingPayment', 'Awaiting Payment'),
-        ('pendingVerification', 'Pending Verification'),
-        ('approved', 'Approved'),
+        ('awaiting_payment', 'Awaiting Payment'),
+        ('pending_verification', 'Pending Verification'),
+        ('verified', 'Verified'),
+        ('rejected', 'Rejected'),
         ('assigned', 'Assigned'),
-        ('inProgress', 'In Progress'),
-        ('awaitingReview', 'Awaiting Review'),
+        ('in_progress', 'In Progress'),
+        ('awaiting_review', 'Awaiting Review'),
         ('completed', 'Completed'),
         ('delivered', 'Delivered'),
         ('cancelled', 'Cancelled'),
     ]
     
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.id = kwargs.get('id', '')
         self.candidateId = kwargs.get('candidateId', '')
         self.designerId = kwargs.get('designerId', '')
@@ -271,16 +273,19 @@ class Order(BaseFirestoreModel):
         self.orderedAt = kwargs.get('orderedAt', timezone.now())
         self.paymentVerified = kwargs.get('paymentVerified', False)
         self.status = kwargs.get('status', 'pending')
+        self.statusDetails = kwargs.get('statusDetails', '')  # New field for verification details
         self.notes = kwargs.get('notes', '')
         self.lastStatusUpdate = kwargs.get('lastStatusUpdate', timezone.now())
         self.telegramUserId = kwargs.get('telegramUserId', '')
-        super().__init__(**kwargs)
     
     def save(self):
         """Save order to Firestore"""
-        db = firestore.client()
+        required_fields = ['id', 'candidateId', 'telegramUserId', 'status']
+        self.validate_required_fields(required_fields)
         if not self.id:
             self.id = str(uuid.uuid4())
+        self.updated_at = datetime.now()  # Update timestamp
+        db = firestore.client()
         doc_ref = db.collection('orders').document(self.id)
         doc_ref.set(self.to_dict())
         return self
@@ -296,7 +301,7 @@ class Order(BaseFirestoreModel):
         return None
     
     @classmethod
-    def get_by_candidate_id(cls, candidate_id: str):
+    def get_by_candidate_id(cls, candidate_id: str) -> List['Order']:
         """Get orders by candidate ID"""
         db = firestore.client()
         query = db.collection('orders').where('candidateId', '==', candidate_id)
@@ -304,7 +309,7 @@ class Order(BaseFirestoreModel):
         return [cls.from_dict(doc.to_dict()) for doc in docs]
     
     @classmethod
-    def get_by_status(cls, status: str):
+    def get_by_status(cls, status: str) -> List['Order']:
         """Get orders by status"""
         db = firestore.client()
         query = db.collection('orders').where('status', '==', status)
@@ -312,40 +317,48 @@ class Order(BaseFirestoreModel):
         return [cls.from_dict(doc.to_dict()) for doc in docs]
     
     @classmethod
-    def get_pending_verification(cls):
+    def get_pending_verification(cls) -> List['Order']:
         """Get orders pending payment verification"""
         return cls.get_by_status('pending_verification')
     
     @classmethod
-    def get_approved_orders(cls):
-        """Get approved orders ready for assignment"""
-        return cls.get_by_status('approved')
+    def get_verified_orders(cls) -> List['Order']:
+        """Get verified orders ready for assignment"""
+        return cls.get_by_status('verified')
     
     @classmethod
-    def get_completed_orders_for_delivery(cls):
+    def get_completed_orders_for_delivery(cls) -> List['Order']:
         """Get completed orders ready for delivery"""
         db = firestore.client()
         query = db.collection('orders').where('status', '==', 'completed').where('deliveryDate', '<=', timezone.now())
         docs = query.stream()
         return [cls.from_dict(doc.to_dict()) for doc in docs]
     
-    def update_status(self, new_status: str, notes: str = ''):
-        """Update order status"""
+    def update_status(self, new_status: str, status_details: str = '', notes: str = ''):
+        """Update order status and details"""
+        if new_status not in [choice[0] for choice in self.STATUS_CHOICES]:
+            raise ValueError(f"Invalid status: {new_status}")
         self.status = new_status
+        self.statusDetails = status_details or self.statusDetails  # Update statusDetails if provided
         self.lastStatusUpdate = timezone.now()
         if notes:
             self.notes = notes
         
-        # Set delivery date for approved orders
-        if new_status == 'approved' and not self.deliveryDate:
+        # Set delivery date for verified orders
+        if new_status == 'verified' and not self.deliveryDate:
             self.deliveryDate = timezone.now() + timedelta(days=3)
         
         self.save()
     
     def approve_payment(self):
-        """Approve payment and update status"""
+        """Approve payment and update status to verified"""
         self.paymentVerified = True
-        self.update_status('approved')
+        self.update_status('verified', status_details='Payment approved')
+    
+    def reject_payment(self, reason: str = ''):
+        """Reject payment and update status"""
+        self.paymentVerified = False
+        self.update_status('rejected', status_details=reason or 'Payment rejected')
     
     def assign_to_designer(self, designer_id: str):
         """Assign order to designer"""
@@ -360,8 +373,6 @@ class Order(BaseFirestoreModel):
     def mark_delivered(self):
         """Mark order as delivered"""
         self.update_status('delivered')
-
-
 class Candidate(BaseFirestoreModel):
     """Candidate model corresponding to 'candidates' collection"""
     
