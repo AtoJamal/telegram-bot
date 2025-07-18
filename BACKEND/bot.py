@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -32,58 +33,12 @@ from typing import Dict, List
 
 # Ensure Python version is 3.6 or higher
 import sys
-if sys.version_info < (3, 6):
-    raise RuntimeError("This bot requires Python 3.6 or higher")
 
-# Set up Django environment
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'cvbot_backend.settings')
-django.setup()
-
-# Load environment variables
-load_dotenv()
-
-# Get Telegram bot token
-telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-
-# Initialize Firebase only if not already initialized
-try:
-    firebase_admin.get_app()
-except ValueError:
-    cred = credentials.Certificate("../firebaseapikey.json")
-    firebase_admin.initialize_app(cred)
-
-db = firestore.client()
-
-# Set up logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-# Define conversation states
-(
-    SELECT_LANGUAGE,
-    START,
-    COLLECT_PERSONAL_INFO,
-    COLLECT_CONTACT_INFO,
-    COLLECT_PROFESSIONAL_INFO,
-    COLLECT_EDUCATION,
-    COLLECT_SKILLS,
-    COLLECT_CAREER_OBJECTIVE,
-    COLLECT_CERTIFICATIONS,
-    COLLECT_PROJECTS,
-    COLLECT_LANGUAGES,
-    COLLECT_ACTIVITIES,
-    CONFIRM_ORDER,
-    PAYMENT
-) = range(14)
-
-# Bilingual prompts dictionary
 PROMPTS = {
     'en': {
         'welcome_new': "Welcome to the CV Bot! Let's create your professional CV.\n\nPlease enter your first name:",
         'welcome_back': "Welcome back! You already have a profile. Would you like to update your information or create a new CV?",
-        'select_language': "Please select your preferred language:\nእባክዎ የሚመርጡትን ቋንቋ ይምረጡ፡",
+        'select_language': "Please select your preferred language:",
         'update_profile': "Update Profile",
         'new_cv': "Create New CV",
         'edit_section': "Which section would you like to update?",
@@ -156,12 +111,20 @@ PROMPTS = {
         'payment_confirmation': "Thank you! Your payment is being processed. We will notify you once it's verified. Please come back later.",
         'cancel_message': "Operation cancelled. Type /start to begin again.",
         'help_message': "Use /start to create or update your CV profile.\nUse /cancel to stop the current operation.",
-        'error_message': "An error occurred. Please try again or contact support."
+        'error_message': "An error occurred. Please try again or contact support.",
+        'profile_image_prompt': "Please upload your profile image as a photo or file (JPG, JPEG, PNG, PDF only, max 5 MB). Type 'skip' to proceed without an image. Note: DOC, DOCX, and similar formats are not supported.",
+        'profile_image_success': "Profile image uploaded successfully. Proceed to professional information?",
+        'invalid_file_type': "Invalid file type. Please upload a JPG, JPEG, PNG, or PDF file. DOC, DOCX, and similar formats are not supported.",
+        'file_too_large': "File too large. Please upload an image or file under 5 MB.",
+        'profile_image_skip': "Profile image skipped. Proceed to professional information?",
+        'continue_professional': "Continue to Professional Info",
+        'payment_instructions': "Please make a payment of 100 Birr to:\n\nBank: Commercial Bank of Ethiopia\nAccount: 1000123456789\nName: CV Bot Service\n\nAfter payment, please upload a screenshot of the payment confirmation (JPG, JPEG, PNG, PDF only, max 5 MB). Note: DOC, DOCX, and similar formats are not supported.",
+        'payment_screenshot_success': "Payment screenshot uploaded successfully. Awaiting verification."
     },
     'am': {
         'welcome_new': "ወደ CV ቦት እንኳን በደህና መጡ! የፕሮፌሽናል ሲቪዎን እንፍጠር።\n\nእባክዎ የመጀመሪያ ስምዎን ያስገቡ፡",
         'welcome_back': "እንኳን ተመልሰው መጡ! ቀድሞ ፕሮፋይል አለዎት። መረጃዎን ማዘመን ወይም አዲስ ሲቪ መፍጠር ይፈልጋሉ?",
-        'select_language': "እባክዎ የሚመርጡትን ቋንቋ ይምረጡ፡\nPlease select your preferred language:",
+        'select_language': "እባክዎ የሚመርጡትን ቋንቋ ይምረጡ፡",
         'update_profile': "ፕሮፋይል አዘምን",
         'new_cv': "አዲስ ሲቪ ፍጠር",
         'edit_section': "የትኛውን ክፍል ማዘመን ይፈልጋሉ?",
@@ -234,9 +197,66 @@ PROMPTS = {
         'payment_confirmation': "እናመሰግናለን! ክፍያዎ በሂደት ላይ ነው። ከተረጋገጠ በኋላ እናሳውቅዎታለን። እባክዎ ቆይተው ይመለሱ።",
         'cancel_message': "ክወናው ተሰርዟል። እንደገና ለመጀመር /start ይፃፉ።",
         'help_message': "ሲቪ ፕሮፋይልዎን ለመፍጠር ወይም ለማዘመን /start ይጠቀሙ።\nክወናውን ለማቆም /cancel ይጠቀሙ።",
-        'error_message': "ስህተት ተከስቷል። እባክዎ እንደገና ይሞክሩ ወይም ድጋፍ ያግኙ።"
+        'error_message': "ስህተት ተከስቷል። እባክዎ እንደገና ይሞክሩ ወይም ድጋፍ ያግኙ።",
+        'profile_image_prompt': "እባክዎ የፕሮፋይል ምስልዎን እንደ ፎቶ ወይም ፋይል (JPG, JPEG, PNG, PDF ብቻ፣ ከፍተኛ 5 ሜባ) ይስቀሉ። ያለ ምስል ለመቀጠል 'skip' ይፃፉ። ማሳሰቢያ፡ DOC, DOCX እና ተመሳሳይ ቅርጸቶች አይደገፉም።",
+        'profile_image_success': "የፕሮፋይል ምስል በተሳካ ሁኔታ ተሰቅሏል። ወደ ሙያዊ መረጃ መቀጠል?",
+        'invalid_file_type': "የተሳሳተ የፋይል አይነት። እባክዎ JPG, JPEG, PNG ወይም PDF ፋይል ይስቀሉ። DOC, DOCX እና ተመሳሳይ ቅርጸቶች አይደገፉም።",
+        'file_too_large': "ፋይሉ በጣም ትልቅ ነው። እባክዎ ከ5 ሜባ በታች ያለ ምስል ወይም ፋይል ይስቀሉ።",
+        'profile_image_skip': "የፕሮፋይል ምስል ተዘልሏል። ወደ ሙያዊ መረጃ መቀጠል?",
+        'continue_professional': "ወደ ሙያዊ መረጃ ቀጥል",
+        'payment_instructions': "እባክዎ 100 ብር ይክፈሉ፡\n\nባንክ፡ የኢትዮጵያ ንግድ ባንክ\nመለያ፡ 1000123456789\nስም፡ CV ቦት አገልግሎት\n\nክፍያ ከፈጸሙ በኋላ፣ እባክዎ የክፍያ ማረጋገጫ ፎቶ (JPG, JPEG, PNG, PDF ብቻ፣ ከፍተኛ 5 ሜባ) ይስቀሉ። ማሳሰቢያ፡ DOC, DOCX እና ተመሳሳይ ቅርጸቶች አይደገፉም።",
+        'payment_screenshot_success': "የክፍያ ማረጋገጫ ፎቶ በተሳካ ሁኔታ ተሰቅሏል። ማረጋገጫ በመጠበቅ ላይ።"
     }
 }
+
+
+if sys.version_info < (3, 6):
+    raise RuntimeError("This bot requires Python 3.6 or higher")
+
+# Set up Django environment
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'cvbot_backend.settings')
+django.setup()
+
+# Load environment variables
+load_dotenv()
+
+# Get Telegram bot token and private channel ID
+telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+private_channel_id = os.getenv('PRIVATE_CHANNEL_ID')
+
+# Initialize Firebase only if not already initialized
+try:
+    firebase_admin.get_app()
+except ValueError:
+    cred = credentials.Certificate("../firebaseapikey.json")
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+
+# Set up logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Define conversation states
+(
+    SELECT_LANGUAGE,
+    START,
+    COLLECT_PERSONAL_INFO,
+    COLLECT_CONTACT_INFO,
+    COLLECT_PROFILE_IMAGE,
+    COLLECT_PROFESSIONAL_INFO,
+    COLLECT_EDUCATION,
+    COLLECT_SKILLS,
+    COLLECT_CAREER_OBJECTIVE,
+    COLLECT_CERTIFICATIONS,
+    COLLECT_PROJECTS,
+    COLLECT_LANGUAGES,
+    COLLECT_ACTIVITIES,
+    CONFIRM_ORDER,
+    PAYMENT
+) = range(15)
 
 class CVBot:
     def __init__(self, token: str):
@@ -253,13 +273,21 @@ class CVBot:
                     CallbackQueryHandler(self.select_language, pattern="^lang_")
                 ],
                 START: [
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.start_collecting_info)
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.start_collecting_info),
+                    CallbackQueryHandler(self.start_collecting_info, pattern="^(update_profile|new_cv)$")
                 ],
                 COLLECT_PERSONAL_INFO: [
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.collect_personal_info)
                 ],
                 COLLECT_CONTACT_INFO: [
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.collect_contact_info)
+                ],
+                COLLECT_PROFILE_IMAGE: [
+                    MessageHandler(
+                        filters.PHOTO | filters.Document.IMAGE | filters.Document.MimeType("application/pdf") | filters.TEXT,
+                        self.collect_profile_image
+                    ),
+                    CallbackQueryHandler(self.handle_profile_image_choice, pattern="^continue_professional$")
                 ],
                 COLLECT_PROFESSIONAL_INFO: [
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.collect_professional_info),
@@ -296,7 +324,10 @@ class CVBot:
                     CallbackQueryHandler(self.edit_info, pattern="^edit_")
                 ],
                 PAYMENT: [
-                    MessageHandler(filters.PHOTO, self.handle_payment_screenshot)
+                    MessageHandler(
+                        filters.PHOTO | filters.Document.IMAGE | filters.Document.MimeType("application/pdf"),
+                        self.handle_payment_screenshot
+                    )
                 ]
             },
             fallbacks=[CommandHandler("cancel", self.cancel)],
@@ -347,7 +378,7 @@ class CVBot:
             PROMPTS['en']['select_language'],  # Always show language selection in English for simplicity
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("English", callback_data="lang_en")],
-                [InlineKeyboardButton("አማርኛ", callback_data="lang_am")]
+                [InlineKeyboardButton("አማርኛ (Amharic)", callback_data="lang_am")]
             ])
         )
         return SELECT_LANGUAGE
@@ -424,6 +455,7 @@ class CVBot:
         return InlineKeyboardMarkup([
             [InlineKeyboardButton(self.get_prompt(session, 'personal_info'), callback_data="edit_personal")],
             [InlineKeyboardButton(self.get_prompt(session, 'contact_info'), callback_data="edit_contact")],
+            [InlineKeyboardButton(self.get_prompt(session, 'profile_image'), callback_data="edit_profile_image")],
             [InlineKeyboardButton(self.get_prompt(session, 'work_experience'), callback_data="edit_work")],
             [InlineKeyboardButton(self.get_prompt(session, 'education'), callback_data="edit_education")],
             [InlineKeyboardButton(self.get_prompt(session, 'skills'), callback_data="edit_skills")],
@@ -453,8 +485,8 @@ class CVBot:
             return COLLECT_PERSONAL_INFO
         elif current_field == 'lastName':
             session['candidate_data']['lastName'] = update.message.text
-            await update.message.reply_text(self.get_prompt(session, 'phone_number'))
             session['current_field'] = 'phoneNumber'
+            await update.message.reply_text(self.get_prompt(session, 'phone_number'))
             return COLLECT_CONTACT_INFO
 
     async def collect_contact_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -487,9 +519,96 @@ class CVBot:
             return COLLECT_CONTACT_INFO
         elif current_field == 'country':
             session['candidate_data']['country'] = update.message.text
-            await update.message.reply_text(self.get_prompt(session, 'job_title'))
+            await update.message.reply_text(self.get_prompt(session, 'profile_image_prompt'))
+            return COLLECT_PROFILE_IMAGE
+
+    async def collect_profile_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Collect profile image (photo or file) from candidate"""
+        user = update.effective_user
+        telegram_id = str(user.id)
+        session = self.get_user_session(telegram_id)
+        
+        if update.message.text and update.message.text.lower() == 'skip':
+            session['candidate_data']['profileUrl'] = None  # Clear profileUrl if skipped
+            await update.message.reply_text(
+                self.get_prompt(session, 'profile_image_skip'),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(self.get_prompt(session, 'continue_professional'), callback_data="continue_professional")]
+                ])
+            )
+            return COLLECT_PROFILE_IMAGE
+        
+        max_size = 5 * 1024 * 1024  # 5 MB
+        allowed_mime_types = ['image/jpeg', 'image/png', 'application/pdf']
+        allowed_extensions = ['jpg', 'jpeg', 'png', 'pdf']
+        
+        caption = f"Profile Image - Name: {session['candidate_data'].get('firstName', '')} {session['candidate_data'].get('lastName', '')}, Phone: {session['candidate_data'].get('phoneNumber', '')}"
+        
+        try:
+            if update.message.photo:
+                photo = update.message.photo[-1]
+                file = await photo.get_file()
+                if file.file_size > max_size:
+                    await update.message.reply_text(self.get_prompt(session, 'file_too_large'))
+                    return COLLECT_PROFILE_IMAGE
+                # Store the file URL
+                session['candidate_data']['profileUrl'] = file.file_path
+                # Forward the photo to the private channel
+                await update.message.copy(
+                    chat_id=private_channel_id,
+                    caption=caption
+                )
+            elif update.message.document:
+                document = update.message.document
+                if document.file_size > max_size:
+                    await update.message.reply_text(self.get_prompt(session, 'file_too_large'))
+                    return COLLECT_PROFILE_IMAGE
+                if document.mime_type not in allowed_mime_types:
+                    await update.message.reply_text(self.get_prompt(session, 'invalid_file_type'))
+                    return COLLECT_PROFILE_IMAGE
+                if document.file_name:
+                    extension = document.file_name.split('.')[-1].lower()
+                    if extension not in allowed_extensions:
+                        await update.message.reply_text(self.get_prompt(session, 'invalid_file_type'))
+                        return COLLECT_PROFILE_IMAGE
+                else:
+                    extension = 'pdf' if document.mime_type == 'application/pdf' else 'jpg'
+                # Store the file URL
+                file = await document.get_file()
+                session['candidate_data']['profileUrl'] = file.file_path
+                # Forward the document to the private channel
+                await update.message.copy(
+                    chat_id=private_channel_id,
+                    caption=caption
+                )
+            else:
+                await update.message.reply_text(self.get_prompt(session, 'profile_image_prompt'))
+                return COLLECT_PROFILE_IMAGE
+            
+            await update.message.reply_text(
+                self.get_prompt(session, 'profile_image_success'),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(self.get_prompt(session, 'continue_professional'), callback_data="continue_professional")]
+                ])
+            )
+            return COLLECT_PROFILE_IMAGE
+        except Exception as e:
+            logger.error(f"Error in collect_profile_image: {str(e)}")
+            await update.message.reply_text(self.get_prompt(session, 'error_message'))
+            return COLLECT_PROFILE_IMAGE
+
+    async def handle_profile_image_choice(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """Handle the user's choice to proceed after profile image"""
+        query = update.callback_query
+        await query.answer()
+        
+        telegram_id = str(query.from_user.id)
+        session = self.get_user_session(telegram_id)
+        
+        if query.data == "continue_professional":
             session['current_field'] = 'work_jobTitle'
             session['current_work_experience'] = {}
+            await query.edit_message_text(self.get_prompt(session, 'job_title'))
             return COLLECT_PROFESSIONAL_INFO
 
     async def collect_professional_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -806,6 +925,7 @@ class CVBot:
         # Show summary of all collected information
         summary = self.get_prompt(session, 'summary_header')
         summary += f"{self.get_prompt(session, 'summary_name')}: {session['candidate_data'].get('firstName', '')} {session['candidate_data'].get('middleName', '')} {session['candidate_data'].get('lastName', '')}\n"
+        
         summary += f"{self.get_prompt(session, 'summary_contact')}: {session['candidate_data'].get('phoneNumber', '')} | {session['candidate_data'].get('emailAddress', '')}\n"
         summary += f"{self.get_prompt(session, 'summary_location')}: {session['candidate_data'].get('city', '')}, {session['candidate_data'].get('country', '')}\n"
         summary += f"{self.get_prompt(session, 'summary_availability')}: {session['candidate_data'].get('availability', 'To be specified')}\n\n"
@@ -966,6 +1086,10 @@ class CVBot:
             session['current_field'] = 'phoneNumber'
             await query.edit_message_text(self.get_prompt(session, 'phone_number'))
             return COLLECT_CONTACT_INFO
+        elif query.data == "edit_profile_image":
+            session['current_field'] = None
+            await query.edit_message_text(self.get_prompt(session, 'profile_image_prompt'))
+            return COLLECT_PROFILE_IMAGE
         elif query.data == "edit_work":
             session['work_experiences'] = []
             session['current_field'] = 'work_jobTitle'
@@ -1015,20 +1139,70 @@ class CVBot:
         telegram_id = str(update.effective_user.id)
         session = self.get_user_session(telegram_id)
         
-        photo = update.message.photo[-1]
-        photo_file = await photo.get_file()
+        max_size = 5 * 1024 * 1024  # 5 MB
+        allowed_mime_types = ['image/jpeg', 'image/png', 'application/pdf']
+        allowed_extensions = ['jpg', 'jpeg', 'png', 'pdf']
         
-        order = Order.get_by_id(session['order_id'])
-        order.paymentScreenshotUrl = "pending_upload"
-        order.update_status("pending_verification")
+        caption = f"Payment Screenshot - Name: {session['candidate_data'].get('firstName', '')} {session['candidate_data'].get('lastName', '')}, Phone: {session['candidate_data'].get('phoneNumber', '')}"
         
-        await update.message.reply_text(self.get_prompt(session, 'payment_confirmation'))
-        
-        # Clear user session
-        if telegram_id in self.user_sessions:
-            del self.user_sessions[telegram_id]
-        
-        return ConversationHandler.END
+        try:
+            if update.message.photo:
+                photo = update.message.photo[-1]
+                file = await photo.get_file()
+                if file.file_size > max_size:
+                    await update.message.reply_text(self.get_prompt(session, 'file_too_large'))
+                    return PAYMENT
+                # Store the file URL
+                file_url = file.file_path
+                # Forward the photo to the private channel
+                await update.message.copy(
+                    chat_id=private_channel_id,
+                    caption=caption
+                )
+            elif update.message.document:
+                document = update.message.document
+                if document.file_size > max_size:
+                    await update.message.reply_text(self.get_prompt(session, 'file_too_large'))
+                    return PAYMENT
+                if document.mime_type not in allowed_mime_types:
+                    await update.message.reply_text(self.get_prompt(session, 'invalid_file_type'))
+                    return PAYMENT
+                if document.file_name:
+                    extension = document.file_name.split('.')[-1].lower()
+                    if extension not in allowed_extensions:
+                        await update.message.reply_text(self.get_prompt(session, 'invalid_file_type'))
+                        return PAYMENT
+                else:
+                    extension = 'pdf' if document.mime_type == 'application/pdf' else 'jpg'
+                # Store the file URL
+                file = await document.get_file()
+                file_url = file.file_path
+                # Forward the document to the private channel
+                await update.message.copy(
+                    chat_id=private_channel_id,
+                    caption=caption
+                )
+            else:
+                await update.message.reply_text(self.get_prompt(session, 'payment_instructions'))
+                return PAYMENT
+            
+            order = Order.get_by_id(session['order_id'])
+            order.paymentScreenshotUrl = file_url
+            order.update_status("pending_verification")
+            order.save()
+            
+            await update.message.reply_text(self.get_prompt(session, 'payment_screenshot_success'))
+            await update.message.reply_text(self.get_prompt(session, 'payment_confirmation'))
+            
+            # Clear user session
+            if telegram_id in self.user_sessions:
+                del self.user_sessions[telegram_id]
+            
+            return ConversationHandler.END
+        except Exception as e:
+            logger.error(f"Error in handle_payment_screenshot: {str(e)}")
+            await update.message.reply_text(self.get_prompt(session, 'error_message'))
+            return PAYMENT
 
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Cancel the current conversation"""

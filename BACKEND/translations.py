@@ -76,10 +76,13 @@ PROMPTS = {
         'cancel_message': "Operation cancelled. Type /start to begin again.",
         'help_message': "Use /start to create or update your CV profile.\nUse /cancel to stop the current operation.",
         'error_message': "An error occurred. Please try again or contact support.",
-        'profile_image_prompt': "Please upload your profile image as a photo or file (JPG, PNG, PDF, max 5 MB) or type 'skip' to proceed without an image:",
-        'invalid_file_type': "Invalid file type. Please upload a JPG, PNG, or PDF file.",
-        'file_too_large': "File too large. Please upload an image under 5 MB.",
-        'profile_image_skip': "Profile image skipped. Proceed to contact information?"
+        'profile_image_prompt': "Please upload your profile image as a photo or file (JPG, JPEG, PNG, PDF only, max 5 MB). Type 'skip' to proceed without an image. Note: DOC, DOCX, and similar formats are not supported.",
+        'invalid_file_type': "Invalid file type. Please upload a JPG, JPEG, PNG, or PDF file. DOC, DOCX, and similar formats are not supported.",
+        'file_too_large': "File too large. Please upload an image or file under 5 MB.",
+        'profile_image_skip': "Profile image skipped. Proceed to professional information?",
+        'continue_professional': "Continue to Professional Info",
+        'payment_instructions': "Please make a payment of 100 Birr to:\n\nBank: Commercial Bank of Ethiopia\nAccount: 1000123456789\nName: CV Bot Service\n\nAfter payment, please upload a screenshot of the payment confirmation (JPG, JPEG, PNG, PDF only, max 5 MB). Note: DOC, DOCX, and similar formats are not supported.",
+        'payment_screenshot_success': "Payment screenshot uploaded successfully. Awaiting verification."
     },
     'am': {
         'welcome_new': "ወደ CV ቦት እንኳን በደህና መጡ! የፕሮፌሽናል ሲቪዎን እንፍጠር።\n\nእባክዎ የመጀመሪያ ስምዎን ያስገቡ፡",
@@ -158,9 +161,12 @@ PROMPTS = {
         'cancel_message': "ክወናው ተሰርዟል። እንደገና ለመጀመር /start ይፃፉ።",
         'help_message': "ሲቪ ፕሮፋይልዎን ለመፍጠር ወይም ለማዘመን /start ይጠቀሙ።\nክወናውን ለማቆም /cancel ይጠቀሙ።",
         'error_message': "ስህተት ተከስቷል። እባክዎ እንደገና ይሞክሩ ወይም ድጋፍ ያግኙ።",
-        'profile_image_prompt': "እባክዎ የፕሮፋይል ምስልዎን እንደ ፎቶ ወይም ፋይል (JPG, PNG, PDF፣ ከፍተኛ 5 ሜባ) ይስቀሉ ወይም 'skip' ይፃፉ ያለ ምስል ለመቀጠል፡",
-        'invalid_file_type': "የተሳሳተ የፋይል አይነት። እባክዎ JPG፣ PNG ወይም PDF ፋይል ይስቀሉ።",
-        'file_too_large': "ፋይሉ በጣም ትልቅ ነው። እባክዎ ከ5 ሜባ በታች ያለ ምስል ይስቀሉ።",
-        'profile_image_skip': "የፕሮፋይል ምስል ተዘልሏል። ወደ እውቂያ መረጃ መቀጠል?"
+        'profile_image_prompt': "እባክዎ የፕሮፋይል ምስልዎን እንደ ፎቶ ወይም ፋይል (JPG, JPEG, PNG, PDF ብቻ፣ ከፍተኛ 5 ሜባ) ይስቀሉ። ያለ ምስል ለመቀጠል 'skip' ይፃፉ። ማሳሰቢያ፡ DOC, DOCX እና ተመሳሳይ ቅርጸቶች አይደገፉም።",
+        'invalid_file_type': "የተሳሳተ የፋይል አይነት። እባክዎ JPG, JPEG, PNG ወይም PDF ፋይል ይስቀሉ። DOC, DOCX እና ተመሳሳይ ቅርጸቶች አይደገፉም።",
+        'file_too_large': "ፋይሉ በጣም ትልቅ ነው። እባክዎ ከ5 ሜባ በታች ያለ ምስል ወይም ፋይል ይስቀሉ።",
+        'profile_image_skip': "የፕሮፋይል ምስል ተዘልሏል። ወደ ሙያዊ መረጃ መቀጠል?",
+        'continue_professional': "ወደ ሙያዊ መረጃ ቀጥል",
+        'payment_instructions': "እባክዎ 100 ብር ይክፈሉ፡\n\nባንክ፡ የኢትዮጵያ ንግድ ባንክ\nመለያ፡ 1000123456789\nስም፡ CV ቦት አገልግሎት\n\nክፍያ ከፈጸሙ በኋላ፣ እባክዎ የክፍያ ማረጋገጫ ፎቶ (JPG, JPEG, PNG, PDF ብቻ፣ ከፍተኛ 5 ሜባ) ይስቀሉ። ማሳሰቢያ፡ DOC, DOCX እና ተመሳሳይ ቅርጸቶች አይደገፉም።",
+        'payment_screenshot_success': "የክፍያ ማረጋገጫ ፎቶ በተሳካ ሁኔታ ተሰቅሏል። ማረጋገጫ በመጠበቅ ላይ።"
     }
 }
