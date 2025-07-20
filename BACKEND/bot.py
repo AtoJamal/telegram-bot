@@ -30,12 +30,9 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import django
 from typing import Dict, List
-import asyncio
 
 # Ensure Python version is 3.6 or higher
 import sys
-
-# PROMPTS dictionary (no changes needed, only relevant keys shown for reference)
 PROMPTS = {
     'en': {
         'welcome_new': "Welcome to the CV Bot! Let's create your professional CV.\n\nPlease enter your first name:",
@@ -60,33 +57,33 @@ PROMPTS = {
         'phone_number': "Now let's collect your contact information.\nPlease enter your phone number (e.g., +251911223344):",
         'email_address': "Please enter your email address:",
         'linkedin_profile': "Please enter your LinkedIn profile URL (if any, or type 'skip'):",
-        'city': "Please enter your city of residence:",
+        'city': "What city do you currently live in?",
         'country': "Please enter your country:",
-        'job_title': "Now let's collect your professional experience.\nPlease enter the job title for your most recent position:",
-        'company_name': "Please enter the company name:",
-        'work_location': "Please enter the location of this position (e.g., city, country):",
-        'work_description': "Please describe your responsibilities and duration (e.g., 'Managed projects, 2019-2021'):",
+        'job_title': "Let's capture your professional experience. What was the job title of your most recent role?(e.g., Software Engineer) If you're a recent graduate or have limited work history, please provide the job title for your most relevant internship(e.g., Networking Intern):",
+        'company_name': "Please enter the company name for this job position. If it was an internship, you can also list the university or institution where it took place (e.g.,Microsoft, Ethio Telecom, University of Gondar ).",
+        'work_location': "Where was this job or internship located? (e.g., 'Addis Ababa, Ethiopia', 'Remote', 'Nairobi, Kenya', 'New York, USA')",
+        'work_description': "Now, let's detail your responsibilities and the timeframe for this job position or internship. Briefly explain what you did, your key accomplishments, and the start and end dates \n\n(e.g., 'Conducted lab experiments, prepared reports for senior scientists (Sept 2020 - May 2021)'",
         'add_another_work': "Work experience added. Would you like to add another position?\nPlease select an option below:",
         'add_another': "Add Another",
         'continue': "Continue",
-        'degree_name': "Please enter your degree name (e.g., 'Bachelor of Science in Computer Science'):",
-        'institution_name': "Please enter the institution name (e.g., 'Addis Ababa University'):",
-        'gpa': "Please enter your GPA (e.g., '3.5/4.0', or type 'skip' if not applicable):",
-        'edu_description': "Please describe your education, including the year (e.g., 'Graduated in 2020'):",
+        'degree_name': "What's your degree name? (e.g., 'Bachelor of Science in Computer Science', 'Master of Business Administration', 'PhD in Biology')",
+        'institution_name': "Please provide the name of the university or institution where you obtained this degree(e.g,  'Mekelle University').",
+        'gpa': "What was your GPA for this degree? (e.g., '3.5/4.0', '4.0/5.0', or type 'skip' if you prefer not to include it)",
+        'edu_description': "Please tell us the start and end dates for this degree(e.g., 'Sept 2018 - June 2022', '2016 - 2019', 'Aug 2020 - Present').",
         'achievements_honors': "Please list any achievements or honors (e.g., 'Dean's List', or type 'skip' if none):",
-        'add_another_edu': "Education added. Would you like to add another education entry?\nPlease select an option below:",
-        'skill_name': "Please enter a skill (e.g., 'Python'):",
+        'add_another_edu': "Degree added. Would you like to add another degree entry?\nPlease select an option below:",
+        'skill_name': "What's a key skill you gained from your degree? This could be a technical skill, a research method (e.g., 'Graphic Design' , 'Data Analysis')",
         'skill_proficiency': "Please enter your proficiency level for this skill (e.g., 'Beginner', 'Intermediate', 'Advanced'):",
         'add_another_skill': "Skill added. Would you like to add another skill?\nPlease select an option below:",
-        'career_summary': "Please write your career objective/summary:",
-        'certificate_name': "Now please enter a certification or award (e.g., 'AWS Certified Developer'):",
-        'issuer': "Please enter the issuer of this certification (e.g., 'Amazon Web Services'):",
-        'add_another_cert': "Certification added. Would you like to add another certification or award?\nPlease select an option below:",
-        'project_title': "Please enter the title of a significant project (e.g., 'E-commerce Platform Development'):",
-        'project_description': "Please describe the project, including key details and duration (e.g., 'Developed a web application, 2020-2021'):",
-        'project_link': "Please provide a link to the project (e.g., GitHub repository, live demo, or type 'skip' if none):",
+        'career_summary': "Please tell us the name of your high school and its location. Include the city and country (e.g., \n'Menelik II Secondary School, Addis Ababa, Ethiopia'.",
+        'certificate_name': "Have you earned any certifications or awards? Please list one here. This could be a professional certification, an academic award, or a recognition for a specific skill.(e.g.,  'AWS Certified Developer'):",
+        'issuer': "Please tell us the name of the organization or institution that issued this certification (e.g., \n'Amazon Web Services').",
+        'add_another_cert': "Certification added. Would you like to add another certification?\nPlease select an option below:",
+        'project_title': "Tell us about a key research, project, or final year university project you completed. What was its title?(e.g.,  'Study on Renewable Energy Integration in Rural Areas')",
+        'project_description': "Now, give us a detailed description of your research, project, or final year project/research. Focus on your contributions, methodologies used, outcomes, and the start and end dates(e.g., \nDeveloped a web application using Python and Django, managing database integration and user authentication (Sept 2022 - April 2023)'",
+        'project_link': "Please provide a link to the project/research (e.g., GitHub repository, live demo, google drive, or type 'skip' if none):",
         'add_another_project': "Project added. Would you like to add another project?\nPlease select an option below:",
-        'language_name': "Please enter a language you speak (e.g., 'English'):",
+        'language_name': "Please enter a language you speak, one at a time (e.g., 'Amharic','English'):",
         'language_proficiency': "Please enter your proficiency level for this language (e.g., 'Fluent', 'Native', 'Intermediate'):",
         'add_another_language': "Language added. Would you like to add another language?\nPlease select an option below:",
         'activities': "Please describe any other activities (volunteering, hobbies, etc.):",
@@ -120,7 +117,7 @@ PROMPTS = {
         'file_too_large': "File too large. Please upload an image or file under 5 MB.",
         'profile_image_skip': "Profile image skipped. Proceed to professional information?",
         'continue_professional': "Continue to Professional Info",
-        'payment_instructions': "Please make a payment of 100 Birr to:\n\nBank: Commercial Bank of Ethiopia\nAccount: 1000123456789\nName: CV Bot Service\n\nAfter payment, please upload a screenshot of the payment confirmation (JPG, JPEG, PNG, PDF only, max 5 MB). Note: DOC, DOCX, and similar formats are not supported.",
+        'payment_instructions': "Please make a payment of 100 Birr to:\n\nBank: Commercial Bank of Ethiopia\nAccount: 1000649561382\nName: Jemal Hussen Hassen\n\nAfter payment, please upload a screenshot of the payment confirmation (JPG, JPEG, PNG, PDF only, max 5 MB). Note: DOC, DOCX, and similar formats are not supported.",
         'payment_screenshot_success': "Payment screenshot uploaded successfully. Awaiting verification.",
         'payment_verified': "Your payment has been verified! Your CV is being processed.",
         'payment_rejected': "Your payment was rejected: {reason}. Please start a new order with /start."
@@ -150,32 +147,32 @@ PROMPTS = {
         'linkedin_profile': "እባክዎ የሊንክዲን ፕሮፋይል ዩአርኤልዎን ያስገቡ (ካለ፣ ወይም 'skip' ይፃፉ):",
         'city': "እባክዎ የሚኖሩበትን ከተማ ያስገቡ፡",
         'country': "እባክዎ አገርዎን ያስገቡ፡",
-        'job_title': "አሁን የሙያ ልምድዎን እንሰብስብ።\nእባክዎ ለቅርብ ጊዜ ቦታዎ የሥራ መጠሪያ ያስገቡ፡",
-        'company_name': "እባክዎ የኩባንያ ስም ያስገቡ፡",
-        'work_location': "እባክዎ የዚህ ቦታ መገኛ ቦታ ያስገቡ (ለምሳሌ፡ ከተማ፣ አገር):",
-        'work_description': "እባክዎ ኃላፊነቶችዎን እና ቆይታዎን ይግለፁ (ለምሳሌ፡ 'ፕሮጀክቶችን መርቻለሁ፣ 2019-2021'):",
+        'job_title': "ሙያዊ ልምድዎን እንመዝግብ። የቅርብ ጊዜ የሥራ ቦታዎ የሥራ መደብ (Job Title) ምን ነበር?(e.g., Software Engineer) የቅርብ ጊዜ ተመራቂ ከሆኑ ወይም ብዙ የሥራ ልምድ ከሌለዎት፣ እባክዎ በጣም ተዛማጅ የሆነውን የልምምድ ስራዎ internship(e.g., Networking Intern):",
+        'company_name': "እባክዎ ለዚህ የስራ ቦታ የኩባንያውን ስም ያስገቡ። ልምምድ (internship) ከሆነ፣ የተካሄደበትን ዩኒቨርሲቲ ወይም ተቋም መጥቀስ ይችላሉ (e.g.,Microsoft, Ethio Telecom, University of Gondar (for an internship)).",
+        'work_location': "ይህ ስራ ወይም (internship) የት ነበር የሚገኘው?(ለምሳሌ፡ ከተማ፣ አገር):",
+        'work_description': "አሁን፣ የዚህን ስራ  ወይም የልምምድ ስራ (internship) ኃላፊነቶችዎን እና የጊዜ ገደቡን በዝርዝር እንመልከት። ምን እንዳደረጉ፣ ዋና ዋና ስኬቶችዎን፣ እና የጀመሩበትንና የጨረሱበትን ቀን በአጭሩ ያብራሩ። \n\n(e.g. 'የቤተ ሙከራ ሙከራዎችን አከናውኛለሁ፣ ለአዛውንት ሳይንቲስቶች ሪፖርቶችን አዘጋጅቻለሁ (መስከረም 2020 - ግንቦት 2021)'.",
         'add_another_work': "የሥራ ልምድ ታክሏል። ሌላ ቦታ መጨመር ይፈልጋሉ?\nእባክዎ ከታች አማራጭ ይምረጡ፡",
         'add_another': "ሌላ ጨምር",
         'continue': "ቀጥል",
-        'degree_name': "እባክዎ የዲግሪ ስምዎን ያስገቡ (ለምሳሌ፡ 'የኮምፒውተር ሳይንስ ባችለር'):",
-        'institution_name': "እባክዎ የተቋሙ ስም ያስገቡ (ለምሳሌ፡ 'አዲስ አበባ ዩኒቨርሲቲ'):",
-        'gpa': "እባክዎ የጂፒኤዎን ያስገቡ (ለምሳሌ፡ '3.5/4.0'፣ ወይም 'skip' ይፃፉ ካልተገባ):",
-        'edu_description': "እባክዎ ትምህርትዎን ይግለፁ፣ ዓመቱን ጨምሮ (ለምሳሌ፡ 'በ2020 ተመርቻለሁ'):",
+        'degree_name': "የዲግሪዎ ስም ምንድን ነው? (ለምሳሌ፦ 'የኮምፒውተር ሳይንስ ባችለር ኦፍ ሳይንስ', 'ማስተር ኦፍ ቢዝነስ አድሚኒስትሬሽን', 'የባዮሎጂ ፒኤችዲ'):",
+        'institution_name': "እባክዎ ይህንን ዲግሪ ያገኙበትን የዩኒቨርሲቲ ወይም የተቋም ስም ያስገቡ(e.g.,  'መቀሌ ዩኒቨርሲቲ'):",
+        'gpa': "ለዚህ ዲግሪ የነበረው GPA ስንት ነበር? (ለምሳሌ፦ '3.5/4.0', '4.0/5.0'፣ ወይም ማካተት ካልፈለጉ 'skip' ብለው ይጻፉ)",
+        'edu_description': "እባክዎ የዚህን ዲግሪ የመጀመሪያ እና የመጨረሻ ቀናት ይንገሩን (e.g., 'Sept 2018 - June 2022', '2016 - 2019', 'Aug 2020 - Present')",
         'achievements_honors': "እባክዎ ማንኛውንም ስኬቶች ወይም ክብር ይዘርዝሩ (ለምሳሌ፡ 'የዲን ዝርዝር'፣ ወይም 'skip' ይፃፉ ከሌለ):",
-        'add_another_edu': "ትምህርት ታክሏል። ሌላ የትምህርት መግቢያ መጨመር ይፈልጋሉ?\nእባክዎ ከታች አማራጭ ይምረጡ፡",
-        'skill_name': "እባክዎ ችሎታ ያስገቡ (ለምሳሌ፡ 'ፓይተን'):",
+        'add_another_edu': "ዲግሪ ታክሏል። ሌላ ዲግሪ መግቢያ መጨመር ይፈልጋሉ?\nእባክዎ ከታች አማራጭ ይምረጡ፡",
+        'skill_name': "ከዲግሪዎ ያገኙት ቁልፍ ክህሎት ምንድን ነው? ይህ ቴክኒካዊ ክህሎት፣ የምርምር ዘዴ (e.g., 'Graphic Design' , 'Data Analysis')",
         'skill_proficiency': "እባክዎ ለዚህ ችሎታ የብቃት ደረጃዎን ያስገቡ (ለምሳሌ፡ 'ጀማሪ'፣ 'መካከለኛ'፣ 'ከፍተኛ'):",
         'add_another_skill': "ችሎታ ታክሏል። ሌላ ችሎታ መጨመር ይፈልጋሉ?\nእባክዎ ከታች አማራጭ ይምረጡ፡",
-        'career_summary': "እባክዎ የሙያ ግብዎን/ማጠቃለያዎን ይፃፉ፡",
-        'certificate_name': "አሁን እባክዎ ሰርቲፊኬት ወይም ሽልማት ያስገቡ (ለምሳሌ፡ 'AWS የተረጋገጠ ገንቢ'):",
-        'issuer': "እባክዎ የዚህ ሰርቲፊኬት አውጪ ያስገቡ (ለምሳሌ፡ 'አማዞን ዌብ ሰርቪስ'):",
-        'add_another_cert': "ሰርቲፊኬት ታክሏል። ሌላ ሰርቲፊኬት ወይም ሽልማት መጨመር ይፈልጋሉ?\nእባክዎ ከታች አማራጭ ይምረጡ፡",
-        'project_title': "እባክዎ የፕሮጀክት ርዕስ ያስገቡ (ለምሳሌ፡ 'የኢ-ኮሜርስ መድረክ ልማት'):",
-        'project_description': "እባክዎ ፕሮጀክቱን ይግለፁ፣ ቁልፍ ዝርዝሮችን እና ቆይታን ጨምሮ (ለምሳሌ፡ 'የድር መተግበሪያ ማዘጋጀት፣ 2020-2021'):",
-        'project_link': "እባክዎ የፕሮጀክቱን አገናኝ ያቅርቡ (ለምሳሌ፡ ጂትሀብ ማከማቻ፣ ቀጥታ ማሳያ፣ ወይም 'skip' ይፃፉ ከሌለ):",
-        'add_another_project': "ፕሮጀክት ታክሏል። ሌላ ፕሮጀክት መጨመር ይፈልጋሉ?\nእባክዎ ከታች አማራጭ ይምረጡ፡",
-        'language_name': "እባክዎ የሚናገሩትን ቋንቋ ያስገቡ (ለምሳሌ፡ 'እንግሊዝኛ'):",
-        'language_proficiency': "እባክዎ ለዚህ ቋንቋ የብቃት ደረጃዎን ያስገቡ (ለምሳሌ፡ 'ተናጋሪ'፣ 'ተወላጅ'፣ 'መካከለኛ'):",
+        'career_summary': "እባክዎ የሁለተኛ ደረጃ ትምህርት ቤትዎን ስም እና የሚገኝበትን ቦታ ይንገሩን። ከተማውን እና ሀገሩን ያካትቱ(e.g., \n'Menelik II Secondary School, Addis Ababa, Ethiopia'.",
+        'certificate_name': "ማናቸውም ሰርተፍኬቶች ወይም ሽልማቶች አግኝተዋል? እባክዎ አንዱን እዚህ ይዘርዝሩ። ይህ ሙያዊ ሰርተፍኬት፣ አካዳሚያዊ ሽልማት ወይም ለአንድ የተወሰነ ክህሎት እውቅና ሊሆን ይችላል (e.g.,'AWS Certified Developer'):",
+        'issuer': "እባክዎ ይህንን ሰርተፍኬት ወይም ሽልማት የሰጠው ድርጅት ወይም ተቋም ስም ያስገቡ(e.g, \n'Amazon Web Services'):",
+        'add_another_cert': "ሰርቲፊኬት ታክሏል። ሌላ ሰርቲፊኬት መጨመር ይፈልጋሉ?\nእባክዎ ከታች አማራጭ ይምረጡ፡",
+        'project_title': "ስለ አንድ ቁልፍ ፕሮጀክት፣ ጥናት ወይም የመጨረሻ ዓመት የዩኒቨርሲቲ ፕሮጀክት ይንገሩን። ርዕሱ ምን ነበር?(e.g 'Study on Renewable Energy Integration in Rural Areas')",
+        'project_description': "አሁን፣ ስለ ፕሮጀክትዎ፣ ጥናትዎ ወይም የመጨረሻ ዓመት የዩኒቨርሲቲ ፕሮጀክትዎ ዝርዝር መግለጫ ይስጡን። በእርስዎ አስተዋፅዖዎች፣ ጥቅም ላይ የዋሉ ዘዴዎች፣ ውጤቶች እና የጀመሩበትና የጨረሱበት ቀናት ላይ ያተኩሩ። (e.g., 'Developed a web application using Python and Django, managing database integration and user authentication (Sept 2022 - April 2023)', ).",
+        'project_link': "እባክዎ የሪሰርቹን/የፕሮጀክቱን አገናኝ(link) ያቅርቡ (e.g., GitHub repository, live demo, or type 'skip' if none):",
+        'add_another_project': "ፕሮጀክት/ሪሰርች ታክሏል። ሌላ ፕሮጀክት/ሪሰርች መጨመር ይፈልጋሉ?\nእባክዎ ከታች አማራጭ ይምረጡ፡",
+        'language_name': "እባክዎ የሚናገሩትን ቋንቋ ያስገቡ (e.g., 'Amahric', 'English'):",
+        'language_proficiency': "እባክዎ ለዚህ ቋንቋ የብቃት ደረጃዎን ያስገቡ (ለምሳሌ፡ 'Fluent'፣ 'Native'፣ 'Intermediate'):",
         'add_another_language': "ቋንቋ ታክሏል። ሌላ ቋንቋ መጨመር ይፈልጋሉ?\nእባክዎ ከታች አማራጭ ይምረጡ፡",
         'activities': "እባክዎ ሌሎች እንቅስቃሴዎችን (በጎ ፈቃደኝነት፣ የትርፍ ጊዜ ማሳለፊያዎች፣ ወዘተ) ይግለፁ፡",
         'summary_header': "የመረጃዎ ማጠቃለያ ይኸው፡\n\n",
@@ -197,7 +194,7 @@ PROMPTS = {
         'summary_languages': "ቋንቋዎች",
         'confirm': "✅ አረጋግጥ",
         'edit': "✏️ አርም",
-        'payment_instructions': "እባክዎ 100 ብር ይክፈሉ፡\n\nባንክ፡ የኢትዮጵያ ንግድ ባንክ\nመለያ፡ 1000123456789\nስም፡ CV ቦት አገልግሎት\n\nክፍያ ከፈጸሙ በኋላ፣ እባክዎ የክፍያ ማረጋገጫ ፎቶ ይስቀሉ።",
+        'payment_instructions': "እባክዎ 100 ብር ይክፈሉ፡\n\nባንክ፡ የኢትዮጵያ ንግድ ባንክ\nመለያ፡ 1000649561382\nስም፡ Jemal Hussen Hassen አገልግሎት\n\nክፍያ ከፈጸሙ በኋላ፣ እባክዎ የክፍያ ማረጋገጫ ፎቶ ይስቀሉ።",
         'payment_confirmation': "እናመሰግናለን! ክፍያዎ በሂደት ላይ ነው። ከተረጋገጠ በኋላ እናሳውቅዎታለን። እባክዎ ቆይተው ይመለሱ።",
         'cancel_message': "ክወናው ተሰርዟል። እንደገና ለመጀመር /start ይፃፉ።",
         'help_message': "ሲቪ ፕሮፋይልዎን ለመፍጠር ወይም ለማዘመን /start ይጠቀሙ።\nክወናውን ለማቆም /cancel ይጠቀሙ።",
@@ -214,7 +211,6 @@ PROMPTS = {
         'payment_rejected': "ክፍያዎ ተቀባይነት አላገኘም፡ {reason}። እባክዎ ከ/start ጋር አዲስ ትዕዛዝ ይጀምሩ።"
     }
 }
-
 
 if sys.version_info < (3, 6):
     raise RuntimeError("This bot requires Python 3.6 or higher")
@@ -266,14 +262,10 @@ logger = logging.getLogger(__name__)
 
 class CVBot:
     def __init__(self, token: str):
-        self.application = Application.builder().token(token).read_timeout(30).write_timeout(30).connect_timeout(30).post_init(self.post_init).build()
+        self.application = Application.builder().token(token).read_timeout(30).write_timeout(30).connect_timeout(30).build()
         self.user_sessions: Dict[str, Dict] = {}  # Dictionary to store user-specific data
         self.setup_handlers()
-
-    async def post_init(self, application: Application) -> None:
-        """Called after application initialization to start background tasks"""
-        self.start_background_tasks()
-
+        
     def setup_handlers(self) -> None:
         """Set up conversation handlers for the bot"""
         conv_handler = ConversationHandler(
@@ -346,45 +338,8 @@ class CVBot:
         
         self.application.add_handler(conv_handler)
         self.application.add_handler(CommandHandler("help", self.help_command))
-        self.application.add_handler(MessageHandler(filters.Chat(int(private_channel_id)) & filters.REPLY, self.handle_admin_reply))
-        self.application.add_handler(MessageHandler(filters.Chat(int(private_channel_id)) & ~filters.REPLY, self.ignore_non_reply_messages))
         self.application.add_error_handler(self.error_handler)
 
-    def start_background_tasks(self) -> None:
-        """Start background tasks for polling order status changes"""
-        self.application.create_task(self.poll_order_status_changes())
-
-    async def poll_order_status_changes(self) -> None:
-        """Poll Firestore for order status changes and send notifications"""
-        while True:
-            try:
-                for telegram_id, session in list(self.user_sessions.items()):
-                    if 'order_id' not in session or 'chat_id' not in session:
-                        logger.debug(f"Skipping session for telegram_id {telegram_id}: missing order_id or chat_id")
-                        continue
-                    order = Order.get_by_id(session['order_id'])
-                    if not order:
-                        logger.debug(f"Order {session['order_id']} not found for telegram_id {telegram_id}")
-                        continue
-                    if order.status in ['verified', 'rejected'] and not session.get('notified', False):
-                        if order.status == 'verified':
-                            await self.application.bot.send_message(
-                                chat_id=session['chat_id'],
-                                text=self.get_prompt(session, 'payment_verified')
-                            )
-                            logger.info(f"Sent payment verified notification to chat_id {session['chat_id']} for order {session['order_id']}")
-                        elif order.status == 'rejected':
-                            reason = order.statusDetails or "No reason provided"
-                            await self.application.bot.send_message(
-                                chat_id=session['chat_id'],
-                                text=self.get_prompt(session, 'payment_rejected').format(reason=reason)
-                            )
-                            logger.info(f"Sent payment rejected notification to chat_id {session['chat_id']} for order {session['order_id']}")
-                        session['notified'] = True
-            except Exception as e:
-                logger.error(f"Error in poll_order_status_changes: {str(e)}")
-            await asyncio.sleep(300)  # Poll every 5 minutes
-    
     def get_user_session(self, user_id: str) -> dict:
         """Get or create a user session"""
         if user_id not in self.user_sessions:
@@ -417,11 +372,12 @@ class CVBot:
         """Send welcome message and prompt for language selection"""
         user = update.effective_user
         telegram_id = str(user.id)
+        
+        # Initialize user session
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id  # Store chat ID for notifications
         
         await update.message.reply_text(
-            PROMPTS['en']['select_language'],
+            PROMPTS['en']['select_language'],  # Always show language selection in English for simplicity
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("English", callback_data="lang_en")],
                 [InlineKeyboardButton("አማርኛ (Amharic)", callback_data="lang_am")]
@@ -436,10 +392,10 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = query.message.chat_id  # Store chat ID
         
-        session['language'] = query.data.split('_')[1]
+        session['language'] = query.data.split('_')[1]  # Set language ('en' or 'am')
         
+        # Check if candidate exists
         candidate = Candidate.get_by_telegram_user_id(telegram_id)
         if candidate:
             await query.edit_message_text(
@@ -464,13 +420,14 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = query.message.chat_id
         
         if query.data == "update_profile":
+            # Load existing profile data
             candidate = Candidate.get_by_telegram_user_id(telegram_id)
             session['candidate_data'] = candidate.to_dict()
             session['candidate_data']['availability'] = session['candidate_data'].get('availability', 'To be specified')
             
+            # Load all subcollections
             manager = CandidateManager(candidate.uid)
             profile = manager.get_complete_profile()
             
@@ -516,7 +473,6 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'firstName':
@@ -540,7 +496,6 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'phoneNumber':
@@ -574,10 +529,9 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         
         if update.message.text and update.message.text.lower() == 'skip':
-            session['candidate_data']['profileUrl'] = None
+            session['candidate_data']['profileUrl'] = None  # Clear profileUrl if skipped
             await update.message.reply_text(
                 self.get_prompt(session, 'profile_image_skip'),
                 reply_markup=InlineKeyboardMarkup([
@@ -586,7 +540,7 @@ class CVBot:
             )
             return COLLECT_PROFILE_IMAGE
         
-        max_size = 5 * 1024 * 1024
+        max_size = 5 * 1024 * 1024  # 5 MB
         allowed_mime_types = ['image/jpeg', 'image/png', 'application/pdf']
         allowed_extensions = ['jpg', 'jpeg', 'png', 'pdf']
         
@@ -599,7 +553,9 @@ class CVBot:
                 if file.file_size > max_size:
                     await update.message.reply_text(self.get_prompt(session, 'file_too_large'))
                     return COLLECT_PROFILE_IMAGE
+                # Store the file URL
                 session['candidate_data']['profileUrl'] = file.file_path
+                # Forward the photo to the private channel
                 await update.message.copy(
                     chat_id=private_channel_id,
                     caption=caption
@@ -619,8 +575,10 @@ class CVBot:
                         return COLLECT_PROFILE_IMAGE
                 else:
                     extension = 'pdf' if document.mime_type == 'application/pdf' else 'jpg'
+                # Store the file URL
                 file = await document.get_file()
                 session['candidate_data']['profileUrl'] = file.file_path
+                # Forward the document to the private channel
                 await update.message.copy(
                     chat_id=private_channel_id,
                     caption=caption
@@ -648,7 +606,6 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = query.message.chat_id
         
         if query.data == "continue_professional":
             session['current_field'] = 'work_jobTitle'
@@ -661,7 +618,6 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'work_jobTitle':
@@ -699,7 +655,6 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = query.message.chat_id
         
         if query.data == "add_another_work":
             session['current_field'] = 'work_jobTitle'
@@ -716,7 +671,6 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'edu_degreeName':
@@ -759,7 +713,6 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = query.message.chat_id
         
         if query.data == 'add_another_edu':
             session['current_field'] = 'edu_degreeName'
@@ -776,7 +729,6 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'skill_skillName':
@@ -804,7 +756,6 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = query.message.chat_id
         
         if query.data == "add_another_skill":
             session['current_field'] = 'skill_skillName'
@@ -819,7 +770,6 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         
         session['career_objectives'].append({
             'summaryText': update.message.text
@@ -835,7 +785,6 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'cert_certificateName':
@@ -863,7 +812,6 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = query.message.chat_id
         
         if query.data == "add_another_cert":
             session['current_field'] = 'cert_certificateName'
@@ -880,7 +828,6 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'project_projectTitle':
@@ -914,7 +861,6 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = query.message.chat_id
         
         if query.data == "add_another_project":
             session['current_field'] = 'project_projectTitle'
@@ -931,7 +877,6 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         current_field = session['current_field']
         
         if current_field == 'lang_languageName':
@@ -959,7 +904,6 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = query.message.chat_id
         
         if query.data == "add_another_language":
             session['current_field'] = 'lang_languageName'
@@ -974,13 +918,13 @@ class CVBot:
         user = update.effective_user
         telegram_id = str(user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         
         session['activities'].append({
             'activityType': 'Other',
             'description': update.message.text
         })
         
+        # Show summary of all collected information
         summary = self.get_prompt(session, 'summary_header')
         summary += f"{self.get_prompt(session, 'summary_name')}: {session['candidate_data'].get('firstName', '')} {session['candidate_data'].get('middleName', '')} {session['candidate_data'].get('lastName', '')}\n"
         
@@ -1040,9 +984,9 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = query.message.chat_id
         
         if query.data == "confirm_yes":
+            # Create or update candidate
             candidate = Candidate.get_by_telegram_user_id(telegram_id)
             if not candidate:
                 candidate = Candidate(
@@ -1052,10 +996,12 @@ class CVBot:
                 )
                 candidate.save()
             else:
+                # Update existing candidate
                 for key, value in session['candidate_data'].items():
                     setattr(candidate, key, value)
                 candidate.save()
             
+            # Save all subcollections
             for work_exp in session['work_experiences']:
                 WorkExperience(
                     candidate_uid=candidate.uid,
@@ -1104,6 +1050,7 @@ class CVBot:
                     **activity
                 ).save()
             
+            # Create order
             order = Order(
                 id=str(uuid.uuid4()),
                 candidateId=candidate.uid,
@@ -1112,9 +1059,10 @@ class CVBot:
             )
             order.save()
             
+            # Store order ID in session
             session['order_id'] = order.id
-            session['notified'] = False  # Reset notification flag for new order
             
+            # Send payment instructions
             await query.edit_message_text(self.get_prompt(session, 'payment_instructions'))
             return PAYMENT
         else:
@@ -1131,7 +1079,6 @@ class CVBot:
         
         telegram_id = str(query.from_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = query.message.chat_id
         
         if query.data == "edit_personal":
             session['current_field'] = 'firstName'
@@ -1193,13 +1140,12 @@ class CVBot:
         """Handle payment screenshot upload"""
         telegram_id = str(update.effective_user.id)
         session = self.get_user_session(telegram_id)
-        session['chat_id'] = update.effective_chat.id
         
-        max_size = 5 * 1024 * 1024
+        max_size = 5 * 1024 * 1024  # 5 MB
         allowed_mime_types = ['image/jpeg', 'image/png', 'application/pdf']
         allowed_extensions = ['jpg', 'jpeg', 'png', 'pdf']
         
-        caption = f"Payment Screenshot - Order ID: {session['order_id']} - Name: {session['candidate_data'].get('firstName', '')} {session['candidate_data'].get('lastName', '')}, Phone: {session['candidate_data'].get('phoneNumber', '')}"
+        caption = f"Payment Screenshot - Name: {session['candidate_data'].get('firstName', '')} {session['candidate_data'].get('lastName', '')}, Phone: {session['candidate_data'].get('phoneNumber', '')}"
         
         try:
             if update.message.photo:
@@ -1208,7 +1154,9 @@ class CVBot:
                 if file.file_size > max_size:
                     await update.message.reply_text(self.get_prompt(session, 'file_too_large'))
                     return PAYMENT
+                # Store the file URL
                 file_url = file.file_path
+                # Forward the photo to the private channel
                 await update.message.copy(
                     chat_id=private_channel_id,
                     caption=caption
@@ -1228,8 +1176,10 @@ class CVBot:
                         return PAYMENT
                 else:
                     extension = 'pdf' if document.mime_type == 'application/pdf' else 'jpg'
+                # Store the file URL
                 file = await document.get_file()
                 file_url = file.file_path
+                # Forward the document to the private channel
                 await update.message.copy(
                     chat_id=private_channel_id,
                     caption=caption
@@ -1239,17 +1189,16 @@ class CVBot:
                 return PAYMENT
             
             order = Order.get_by_id(session['order_id'])
-            if not order:
-                logger.error(f"Order {session['order_id']} not found for telegram_id {telegram_id}")
-                await update.message.reply_text(self.get_prompt(session, 'error_message'))
-                return PAYMENT
-            
             order.paymentScreenshotUrl = file_url
-            order.update_status("pending_verification", status_details="Payment screenshot submitted, awaiting admin verification")
+            order.update_status("pending_verification")
             order.save()
             
             await update.message.reply_text(self.get_prompt(session, 'payment_screenshot_success'))
             await update.message.reply_text(self.get_prompt(session, 'payment_confirmation'))
+            
+            # Clear user session
+            if telegram_id in self.user_sessions:
+                del self.user_sessions[telegram_id]
             
             return ConversationHandler.END
         except Exception as e:
@@ -1257,83 +1206,12 @@ class CVBot:
             await update.message.reply_text(self.get_prompt(session, 'error_message'))
             return PAYMENT
 
-    async def handle_admin_reply(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle admin replies in the private channel to approve or reject payments"""
-        if not update.message or not update.message.chat_id:
-            logger.debug("Ignoring update with no message or chat_id")
-            return
-        
-        if str(update.message.chat_id) != private_channel_id:
-            logger.debug(f"Ignoring message from chat_id {update.message.chat_id}, expected {private_channel_id}")
-            return
-        
-        reply_text = update.message.text.lower() if update.message.text else ""
-        if not (reply_text.startswith('approve') or reply_text.startswith('reject:')):
-            logger.debug(f"Ignoring reply with text: {reply_text}")
-            return
-        
-        try:
-            if not update.message.reply_to_message or not update.message.reply_to_message.caption:
-                logger.debug("Ignoring reply with no valid reply_to_message or caption")
-                return
-            
-            caption = update.message.reply_to_message.caption
-            if not caption.startswith('Payment Screenshot - Order ID:'):
-                logger.debug(f"Ignoring reply with invalid caption: {caption}")
-                return
-            
-            # Extract order_id more robustly
-            try:
-                order_id = caption.split('Order ID: ')[1].split(' - ')[0].strip()
-            except IndexError:
-                logger.error(f"Failed to parse order_id from caption: {caption}")
-                return
-            
-            order = Order.get_by_id(order_id)
-            if not order:
-                logger.error(f"Order {order_id} not found")
-                return
-            
-            telegram_id = order.telegramUserId
-            session = self.get_user_session(telegram_id)
-            if 'chat_id' not in session:
-                logger.error(f"No chat_id found for telegram_id {telegram_id} in session")
-                return
-            
-            if reply_text == 'approve':
-                order.approve_payment()
-                logger.info(f"Order {order_id} approved: paymentVerified={order.paymentVerified}, status={order.status}, statusDetails={order.statusDetails}")
-                if not session.get('notified', False):
-                    await self.application.bot.send_message(
-                        chat_id=session['chat_id'],
-                        text=self.get_prompt(session, 'payment_verified')
-                    )
-                    logger.info(f"Sent immediate payment verified notification to chat_id {session['chat_id']} for order {order_id}")
-                    session['notified'] = True
-            elif reply_text.startswith('reject:'):
-                reason = reply_text[7:].strip() or 'No reason provided'
-                order.reject_payment(reason)
-                logger.info(f"Order {order_id} rejected: paymentVerified={order.paymentVerified}, status={order.status}, statusDetails={order.statusDetails}")
-                if not session.get('notified', False):
-                    await self.application.bot.send_message(
-                        chat_id=session['chat_id'],
-                        text=self.get_prompt(session, 'payment_rejected').format(reason=reason)
-                    )
-                    logger.info(f"Sent immediate payment rejected notification to chat_id {session['chat_id']} for order {order_id}")
-                    session['notified'] = True
-        
-        except Exception as e:
-            logger.error(f"Error in handle_admin_reply: {str(e)}")
-
-    async def ignore_non_reply_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Ignore non-reply messages in the private channel"""
-        logger.debug(f"Ignoring non-reply message in private channel: {update.message.text if update.message.text else 'No text'}")
-
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Cancel the current conversation"""
         telegram_id = str(update.effective_user.id)
         session = self.get_user_session(telegram_id)
         
+        # Clear user session
         if telegram_id in self.user_sessions:
             del self.user_sessions[telegram_id]
         
@@ -1350,12 +1228,10 @@ class CVBot:
         """Log errors and handle connection issues"""
         logger.error(msg="Exception while handling update:", exc_info=context.error)
         
-        if update and update.effective_message and update.effective_user:
+        if update and update.effective_message:
             telegram_id = str(update.effective_user.id)
             session = self.get_user_session(telegram_id)
             await update.effective_message.reply_text(self.get_prompt(session, 'error_message'))
-        else:
-            logger.debug("No effective message or user available to send error message")
 
 def main() -> None:
     """Run the bot"""
