@@ -85,7 +85,11 @@ PROMPTS = {
         'payment_instructions': "Please make a payment of 100 Birr to:\n\nBank: Commercial Bank of Ethiopia\nAccount: 1000649561382\nName: Jemal Hussen Hassen\n\nAfter payment, please upload a screenshot of the payment confirmation (JPG, JPEG, PNG, PDF only, max 5 MB). Note: DOC, DOCX, and similar formats are not supported.",
         'payment_screenshot_success': "Payment screenshot uploaded successfully. Awaiting verification.",
         'payment_verified': "Your payment has been verified! Your CV is being processed.",
-        'payment_rejected': "Your payment was rejected: {reason}. Please start a new order with /start."
+        'payment_rejected': "Your payment was rejected: {reason}. Please start a new order with /start.",
+        'payment_approved': "Your payment has been approved! Your CV is being processed and will be delivered soon.",
+        'reject_reason_prompt': "Please provide the reason for rejecting the payment.",
+        
+
     },
     'am': {
         'welcome_new': "ወደ CV ቦት እንኳን በደህና መጡ! የፕሮፌሽናል ሲቪዎን እንፍጠር።\n\nእባክዎ የመጀመሪያ ስምዎን ያስገቡ፡",
@@ -173,6 +177,8 @@ PROMPTS = {
         'payment_instructions': "እባክዎ 100 ብር ይክፈሉ፡\n\nባንክ፡ የኢትዮጵያ ንግድ ባንክ\nመለያ፡ 1000649561382\nስም፡ Jemal Hussen Hassen\n\nክፍያ ከፈጸሙ በኋላ፣ እባክዎ የክፍያ ማረጋገጫ ፎቶ (JPG, JPEG, PNG, PDF ብቻ፣ ከፍተኛ 5 ሜባ) ይስቀሉ። ማሳሰቢያ፡ DOC, DOCX እና ተመሳሳይ ቅርጸቶች አይደገፉም።",
         'payment_screenshot_success': "የክፍያ ማረጋገጫ ፎቶ በተሳካ ሁኔታ ተሰቅሏል። ማረጋገጫ በመጠበቅ ላይ።",
         'payment_verified': "ክፍያዎ ተረጋግጧል! ሲቪዎ በመዘጋጀት ላይ ነው።",
-        'payment_rejected': "ክፍያዎ ተቀባይነት አላገኘም፡ {reason}። እባክዎ ከ/start ጋር አዲስ ትዕዛዝ ይጀምሩ።"
+        'payment_rejected': "ክፍያዎ ተቀባይነት አላገኘም፡ {reason}። እባክዎ ከ/start ጋር አዲስ ትዕዛዝ ይጀምሩ።",
+        'payment_approved': "ክፍያዎ ተፈቅዷል! ሲቪዎ በመዘጋጀት ላይ ነው እና በቅርቡ ይደርሰዎታል።",
+        'reject_reason_prompt': "እባክዎ ክፍያውን ለመከልከል ምክንያቱን ያቅርቡ።",
     }
 }
