@@ -1,289 +1,395 @@
 import logging
 import os
+import re
 from dotenv import load_dotenv
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, User
 from telegram.ext import (
     Application,
-    CommandHandler,
     MessageHandler,
-    CallbackQueryHandler,
+    CommandHandler,
     filters,
     ContextTypes,
-    ConversationHandler,
 )
 from telegram.request import HTTPXRequest
-import django
-import firebase_admin
-from firebase_admin import credentials, firestore
-from typing import Dict
-import asyncio
 import telegram
 
-# Set up logging first
+# Set up logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-logger.info("Logging configured.")
-
-# Set up Django environment
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'cvbot_backend.settings')
-django.setup()
 
 # Load environment variables
 load_dotenv()
-
-# Get Telegram bot token
 telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
 private_channel_id = os.getenv('PRIVATE_CHANNEL_ID')
 
-# Initialize Firebase
-logger.info("Attempting to load Firebase credentials from: ../firebaseapikey.json")
-try:
-    firebase_admin.get_app()
-except ValueError:
-    cred = credentials.Certificate("../firebaseapikey.json")
-    firebase_admin.initialize_app(cred)
-db = firestore.client()
-logger.info("Firestore client obtained.")
-
-# Define conversation states
-PAYMENT, REJECT_REASON = range(2)
-
-# Dummy PROMPTS for testing
-PROMPTS = {
-    'en': {
-        'payment_instructions': "Please send a payment screenshot.",
-        'payment_screenshot_success': "Payment screenshot received!",
-        'payment_confirmation': "You will be notified once verified.",
-        'error_message': "An error occurred. Please try again or check your network.",
-        'connection_error': "Failed to connect to Telegram API. Please check your internet connection and try again."
-    }
-}
-
-class CVBot:
+class TestBot:
     def __init__(self, token: str):
-        # Configure HTTPXRequest with supported parameters
+        # Configure HTTPXRequest for robust network handling
         request = HTTPXRequest(
             connection_pool_size=10,
-            connect_timeout=60.0,  # 60 seconds for connection
-            read_timeout=60.0,     # 60 seconds for reading
-            write_timeout=60.0     # 60 seconds for writing
+            connect_timeout=60.0,
+            read_timeout=60.0,
+            write_timeout=60.0
         )
         logger.info("Initializing Application with token")
-        # Fix: Use 'request' instead of 'http_request'
         self.application = Application.builder().token(token).request(request).build()
-        self.user_sessions: Dict[str, Dict] = {}
+        
+        # Cache for username to user_id mapping
+        self.user_cache = {}
+        
         self.setup_handlers()
-        logger.info("CVBot initialized successfully")
-    
+        logger.info("TestBot initialized successfully")
+
     def setup_handlers(self) -> None:
-        """Set up conversation handlers for the bot"""
-        conv_handler = ConversationHandler(
-            entry_points=[CommandHandler("start", self.start)],
-            states={
-                PAYMENT: [
-                    MessageHandler(
-                        filters.PHOTO | filters.Document.IMAGE | filters.Document.MimeType("application/pdf"),
-                        self.handle_payment_screenshot
-                    )
-                ],
-                REJECT_REASON: [
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_reject_reason)
-                ]
-            },
-            fallbacks=[CommandHandler("cancel", self.cancel)],
-            per_message=False
-        )
-        self.application.add_handler(conv_handler)
-        self.application.add_handler(CommandHandler("help", self.help_command))
-        # Add callback query handler for inline buttons
-        self.application.add_handler(CallbackQueryHandler(self.handle_admin_response))
+        """Set up message handlers for the bot"""
+        # Handle photo or document uploads in the private channel
+        self.application.add_handler(MessageHandler(
+            filters.Chat(int(private_channel_id)) & (filters.PHOTO | filters.Document.ALL),
+            self.handle_file_upload
+        ))
+        
+        # Handle all private messages to build user cache
+        self.application.add_handler(MessageHandler(
+            filters.ChatType.PRIVATE,
+            self.cache_user_info
+        ))
+        
+        # Add command handlers
+        self.application.add_handler(CommandHandler("start", self.start_command))
+        self.application.add_handler(CommandHandler("register", self.register_command))
+        
         self.application.add_error_handler(self.error_handler)
+
+    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /start command"""
+        user = update.effective_user
+        if user and user.username:
+            username = user.username.lower()
+            user_id = user.id
+            self.user_cache[username] = user_id
+            logger.info(f"✅ User registered via /start: @{username} -> {user_id}")
+            
+            await update.message.reply_text(
+                f"👋 Hello @{user.username}!\n\n"
+                f"🤖 This bot can forward files to you from authorized channels.\n"
+                f"✅ You are now registered and can receive files!\n\n"
+                f"📝 Your user ID: {user_id}"
+            )
+        else:
+            await update.message.reply_text(
+                "👋 Hello! This bot can forward files to you.\n\n"
+                "⚠️ Please set a username in your Telegram settings to receive files."
+            )
     
-    def get_user_session(self, user_id: str) -> dict:
-        if user_id not in self.user_sessions:
-            self.user_sessions[user_id] = {'language': 'en', 'order_id': 'test_order_id'}
-        return self.user_sessions[user_id]
-    
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        telegram_id = str(update.effective_user.id)
-        session = self.get_user_session(telegram_id)
-        await update.message.reply_text(PROMPTS['en']['payment_instructions'])
-        return PAYMENT
-    
-    async def handle_payment_screenshot(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        telegram_id = str(update.effective_user.id)
-        session = self.get_user_session(telegram_id)
+    async def register_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /register command"""
+        user = update.effective_user
+        if user and user.username:
+            username = user.username.lower()
+            user_id = user.id
+            self.user_cache[username] = user_id
+            logger.info(f"✅ User registered via /register: @{username} -> {user_id}")
+            
+            await update.message.reply_text(
+                f"✅ Registration successful!\n\n"
+                f"👤 Username: @{user.username}\n"
+                f"🆔 User ID: {user_id}\n\n"
+                f"📁 You can now receive files through this bot!"
+            )
+        else:
+            await update.message.reply_text(
+                "❌ Registration failed!\n\n"
+                "Please set a username in your Telegram settings first, then try /register again."
+            )
+
+    async def debug_all_messages(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Debug handler to see all messages in the private channel"""
+        message = update.message or update.channel_post
+        if not message:
+            return
+            
+        logger.info(f"🔍 DEBUG: Message received in private channel")
+        logger.info(f"   Chat ID: {message.chat_id}")
+        logger.info(f"   Message ID: {message.message_id}")
+        logger.info(f"   Text: {message.text}")
+        logger.info(f"   Caption: {message.caption}")
+        logger.info(f"   Has photo: {bool(message.photo)}")
+        logger.info(f"   Has document: {bool(message.document)}")
+        logger.info(f"   From user: {message.from_user.username if message.from_user else 'Channel post'}")
+        logger.info(f"   Update type: {'channel_post' if update.channel_post else 'message'}")
+
+    async def cache_user_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Cache user information when they interact with the bot"""
+        if update.effective_user and update.effective_user.username:
+            username = update.effective_user.username.lower()
+            user_id = update.effective_user.id
+            self.user_cache[username] = user_id
+            logger.debug(f"Cached user: @{username} -> {user_id}")
+
+    async def resolve_username_to_id(self, username: str, context: ContextTypes.DEFAULT_TYPE) -> int:
+        """
+        Try to resolve a username to a user ID using multiple methods
+        """
+        # Remove @ if present and convert to lowercase for consistency
+        clean_username = username.replace('@', '').lower()
+        full_username = f"@{clean_username}"
         
+        logger.info(f"🔍 Attempting to resolve username: {full_username}")
+        
+        # Method 1: Check cache first
+        if clean_username in self.user_cache:
+            logger.info(f"✅ Found {full_username} in cache: {self.user_cache[clean_username]}")
+            return self.user_cache[clean_username]
+        
+        # Method 2: Try to get chat info directly (works for public usernames and users who have interacted)
         try:
-            # Get user information
-            user = update.effective_user
-            user_info = f"👤 User: {user.first_name or ''} {user.last_name or ''}".strip()
-            if user.username:
-                user_info += f" (@{user.username})"
-            user_info += f"\n🆔 User ID: {telegram_id}"
-            user_info += f"\n📋 Order ID: {session.get('order_id', 'N/A')}"
-            
-            # Create inline keyboard for admin approval/rejection
-            keyboard = [
-                [
-                    InlineKeyboardButton("✅ Approve", callback_data=f"approve_{telegram_id}"),
-                    InlineKeyboardButton("❌ Reject", callback_data=f"reject_{telegram_id}")
-                ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            # Forward the image to private channel with user info and buttons
-            if update.message.photo:
-                # For photos, get the highest resolution version
-                photo = update.message.photo[-1]
-                await context.bot.send_photo(
-                    chat_id=private_channel_id,
-                    photo=photo.file_id,
-                    caption=f"💳 Payment Screenshot Received\n\n{user_info}",
-                    reply_markup=reply_markup
-                )
-                logger.info(f"Payment screenshot forwarded to private channel for user {telegram_id}")
-            elif update.message.document:
-                # For documents (PDF or images sent as files)
-                document = update.message.document
-                await context.bot.send_document(
-                    chat_id=private_channel_id,
-                    document=document.file_id,
-                    caption=f"💳 Payment Document Received\n\n{user_info}",
-                    reply_markup=reply_markup
-                )
-                logger.info(f"Payment document forwarded to private channel for user {telegram_id}")
-                
+            logger.info(f"🔄 Trying get_chat for {full_username}")
+            chat = await context.bot.get_chat(full_username)  # Use full username with @
+            if chat.type == 'private':
+                user_id = chat.id
+                self.user_cache[clean_username] = user_id
+                logger.info(f"✅ Resolved {full_username} via get_chat: {user_id}")
+                return user_id
+            else:
+                logger.warning(f"❌ {full_username} is not a private chat (type: {chat.type})")
+        except telegram.error.BadRequest as e:
+            logger.warning(f"❌ Could not resolve {full_username} via get_chat: {str(e)}")
         except Exception as e:
-            logger.error(f"Error forwarding payment screenshot to private channel: {str(e)}")
-            await update.message.reply_text("Payment received, but there was an issue processing it. Please contact support.")
-            return ConversationHandler.END
+            logger.error(f"❌ Unexpected error with get_chat for {full_username}: {str(e)}")
         
-        await update.message.reply_text(PROMPTS['en']['payment_screenshot_success'])
-        await update.message.reply_text(PROMPTS['en']['payment_confirmation'])
-        return ConversationHandler.END
-    
-    async def handle_reject_reason(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        await update.message.reply_text("Rejection reason received.")
-        return ConversationHandler.END
-    
-    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-        telegram_id = str(update.effective_user.id)
-        session = self.get_user_session(telegram_id)
-        await update.message.reply_text("Operation cancelled.")
-        if telegram_id in self.user_sessions:
-            del self.user_sessions[telegram_id]
-        return ConversationHandler.END
-    
-    async def handle_admin_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle admin approval/rejection responses"""
-        query = update.callback_query
-        await query.answer()  # Acknowledge the callback query
-        
+        # Method 3: Check if user is in the private channel (admin only feature)
         try:
-            # Parse the callback data
-            action, user_id = query.data.split('_', 1)
+            logger.info(f"🔄 Checking channel administrators for {full_username}")
+            administrators = await context.bot.get_chat_administrators(private_channel_id)
+            for admin in administrators:
+                if admin.user.username and admin.user.username.lower() == clean_username:
+                    user_id = admin.user.id
+                    self.user_cache[clean_username] = user_id
+                    logger.info(f"✅ Found {full_username} as channel admin: {user_id}")
+                    return user_id
+        except Exception as e:
+            logger.warning(f"❌ Could not check channel administrators: {str(e)}")
+        
+        # Method 4: Try to get channel members (this usually fails for channels, but worth trying)
+        try:
+            logger.info(f"🔄 Trying to get chat member info for {full_username}")
+            # This is a long shot - try to get member info
+            member = await context.bot.get_chat_member(private_channel_id, full_username)
+            if member and member.user:
+                user_id = member.user.id
+                self.user_cache[clean_username] = user_id
+                logger.info(f"✅ Found {full_username} as channel member: {user_id}")
+                return user_id
+        except Exception as e:
+            logger.warning(f"❌ Could not get chat member info: {str(e)}")
+        
+        # If all methods fail, provide detailed error message
+        logger.error(f"❌ Could not resolve username {full_username} using any method")
+        raise ValueError(f"Could not resolve username {full_username} to user ID")
+
+    async def handle_file_upload(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle file uploads in the private channel and resend to specified user"""
+        logger.info(f"=== FILE UPLOAD HANDLER TRIGGERED ===")
+        logger.info(f"Update received: {update}")
+        
+        # Handle both regular messages and channel posts
+        message = update.message or update.channel_post
+        if not message:
+            logger.warning("No message or channel_post in update")
+            return
             
-            if action == "approve":
-                # Send approval message to user
-                try:
-                    await context.bot.send_message(
-                        chat_id=user_id,
-                        text="✅ **Payment Approved!**\n\nYour payment has been verified and approved. Thank you for your submission!"
-                    )
-                    # Update the admin message to show it was approved
-                    await query.edit_message_caption(
-                        caption=f"{query.message.caption}\n\n✅ **APPROVED** by {query.from_user.first_name or 'Admin'}",
-                        reply_markup=None
-                    )
-                    logger.info(f"Payment approved for user {user_id} by admin {query.from_user.id}")
-                except Exception as e:
-                    logger.error(f"Error sending approval message to user {user_id}: {str(e)}")
-                    await query.edit_message_caption(
-                        caption=f"{query.message.caption}\n\n✅ **APPROVED** by {query.from_user.first_name or 'Admin'} (Error sending notification to user)",
-                        reply_markup=None
-                    )
-                    
-            elif action == "reject":
-                # Send rejection message to user
-                try:
-                    await context.bot.send_message(
-                        chat_id=user_id,
-                        text="❌ **Payment Rejected**\n\nYour payment submission has been rejected. Please contact support if you believe this was an error or if you need assistance."
-                    )
-                    # Update the admin message to show it was rejected
-                    await query.edit_message_caption(
-                        caption=f"{query.message.caption}\n\n❌ **REJECTED** by {query.from_user.first_name or 'Admin'}",
-                        reply_markup=None
-                    )
-                    logger.info(f"Payment rejected for user {user_id} by admin {query.from_user.id}")
-                except Exception as e:
-                    logger.error(f"Error sending rejection message to user {user_id}: {str(e)}")
-                    await query.edit_message_caption(
-                        caption=f"{query.message.caption}\n\n❌ **REJECTED** by {query.from_user.first_name or 'Admin'} (Error sending notification to user)",
-                        reply_markup=None
-                    )
-                    
-        except ValueError:
-            logger.error(f"Invalid callback data format: {query.data}")
-            await query.edit_message_caption(
-                caption=f"{query.message.caption}\n\n⚠️ **ERROR**: Invalid callback data",
-                reply_markup=None
+        if not message.chat_id:
+            logger.warning("No chat_id in message")
+            return
+
+        logger.info(f"Message chat_id: {message.chat_id} (type: {type(message.chat_id)})")
+        logger.info(f"Expected private_channel_id: {private_channel_id} (type: {type(private_channel_id)})")
+        
+        # More flexible chat ID comparison
+        if str(message.chat_id) != str(private_channel_id):
+            logger.warning(f"Message from wrong chat: {message.chat_id}, expected: {private_channel_id}")
+            return
+        
+        logger.info("✅ Message is from the correct private channel")
+
+        # Check what type of content we have
+        has_photo = bool(message.photo)
+        has_document = bool(message.document)
+        logger.info(f"Content check - Photo: {has_photo}, Document: {has_document}")
+        
+        if not (has_photo or has_document):
+            logger.warning("No photo or document found in message")
+            await message.reply_text("❌ No photo or document found. Please upload a file with the message.")
+            return
+
+        # Check for text with username
+        message_text = message.caption if message.caption else message.text
+        logger.info(f"Message text/caption: '{message_text}'")
+        if not message_text:
+            logger.debug("No text or caption provided with file")
+            await message.reply_text("Please include a username (e.g., @username) with the file.")
+            return
+
+        # Extract username using regex (supports both @username and username)
+        username_match = re.search(r'@?(\w+)', message_text)
+        if not username_match:
+            logger.debug(f"No valid username found in message: {message_text}")
+            await message.reply_text("No valid username found. Please include a username (with or without '@').")
+            return
+
+        username = username_match.group(1)  # Extract username without @
+        full_username = f"@{username}"
+        logger.info(f"Processing file upload for username: {full_username}")
+
+        try:
+            # Resolve username to user ID
+            target_user_id = await self.resolve_username_to_id(username, context)
+            logger.info(f"Resolved {full_username} to user ID: {target_user_id}")
+            
+        except ValueError as e:
+            logger.error(f"Username resolution failed: {str(e)}")
+            await message.reply_text(
+                f"❌ Could not find user {full_username}\n\n"
+                f"**Possible solutions:**\n"
+                f"1️⃣ Ask {full_username} to start a conversation with this bot by sending /start\n"
+                f"2️⃣ Make sure the username is spelled correctly\n"
+                f"3️⃣ Ensure the username is public (not private)\n"
+                f"4️⃣ The user might need to send any message to this bot first\n\n"
+                f"💡 **Tip**: The bot can only send files to users who have interacted with it before!"
+            )
+            return
+        except Exception as e:
+            logger.error(f"Unexpected error resolving username {full_username}: {str(e)}")
+            await message.reply_text(f"Error finding user {full_username}. Please try again.")
+            return
+
+        # Resend the file to the user
+        try:
+            if message.photo:
+                photo = message.photo[-1]  # Get highest resolution
+                sent_message = await context.bot.send_photo(
+                    chat_id=target_user_id,
+                    photo=photo.file_id,
+                    caption=None  # Send without caption to maintain privacy
+                )
+                logger.info(f"Photo sent to user ID {target_user_id}")
+                
+            elif message.document:
+                document = message.document
+                sent_message = await context.bot.send_document(
+                    chat_id=target_user_id,
+                    document=document.file_id,
+                    caption=None  # Send without caption to maintain privacy
+                )
+                logger.info(f"Document sent to user ID {target_user_id}")
+                
+            else:
+                logger.debug("No photo or document found in message")
+                await message.reply_text("No valid file (photo or document) found.")
+                return
+
+            # Confirm successful delivery to the private channel
+            file_type = "photo" if message.photo else "document"
+            await message.reply_text(
+                f"✅ {file_type.capitalize()} sent to {full_username} successfully."
+            )
+
+        except telegram.error.Forbidden:
+            logger.error(f"Bot blocked by user ID {target_user_id}")
+            await message.reply_text(
+                f"❌ Failed to send file to {full_username}. "
+                f"The user has blocked this bot or hasn't started a conversation with it."
+            )
+        except telegram.error.BadRequest as e:
+            logger.error(f"Bad request when sending to user ID {target_user_id}: {str(e)}")
+            await message.reply_text(
+                f"❌ Failed to send file to {full_username}. "
+                f"Error: {str(e)}"
             )
         except Exception as e:
-            logger.error(f"Error handling admin response: {str(e)}")
-            await query.message.reply_text("An error occurred while processing your response.")
+            logger.error(f"Unexpected error sending file to user ID {target_user_id}: {str(e)}")
+            await message.reply_text(
+                f"❌ An unexpected error occurred while sending the file to {full_username}."
+            )
 
-    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        telegram_id = str(update.effective_user.id)
-        session = self.get_user_session(telegram_id)
-        await update.message.reply_text("This is a test bot. Use /start to begin.")
-    
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        logger.error(f"Update {update} caused error {context.error}")
-        telegram_id = str(update.effective_user.id) if update and update.effective_user else "unknown"
-        session = self.get_user_session(telegram_id)
-        error_message = PROMPTS['en']['connection_error'] if isinstance(context.error, telegram.error.TimedOut) else PROMPTS['en']['error_message']
-        try:
-            if update.callback_query:
-                await update.callback_query.message.reply_text(error_message)
-            elif update.message:
-                await update.message.reply_text(error_message)
-            else:
-                logger.warning("No valid message or callback query for error notification")
-        except Exception as e:
-            logger.error(f"Error sending error message to user {telegram_id}: {str(e)}")
-    
+        """Log errors and notify appropriately"""
+        logger.error(msg="Exception while handling update:", exc_info=context.error)
+        
+        # Only reply if we have a message to reply to
+        if update and update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    "⚠️ An error occurred while processing your request. Please try again."
+                )
+            except Exception as reply_error:
+                logger.error(f"Could not send error message: {str(reply_error)}")
+
     def run(self):
         """Start the bot with retry logic"""
         max_retries = 3
         retry_delay = 5.0
+        
         for attempt in range(max_retries):
             try:
                 logger.info("Starting Telegram bot with polling")
-                # Use run_polling() directly - it handles the event loop internally
                 self.application.run_polling(
-                    poll_interval=1.0,     # Check for updates every 1 second
-                    timeout=10,            # Timeout for long polling
-                    bootstrap_retries=3,   # Retry bootstrap operations
-                    close_loop=False       # Don't close the event loop
+                    poll_interval=1.0,
+                    timeout=20,  # Increased timeout
+                    bootstrap_retries=3,
+                    close_loop=False,
+                    drop_pending_updates=True  # Clear old updates on startup
                 )
                 return
+                
             except telegram.error.TimedOut as e:
                 logger.error(f"Telegram API connection timed out (attempt {attempt + 1}/{max_retries}): {str(e)}")
                 if attempt < max_retries - 1:
                     logger.info(f"Retrying in {retry_delay} seconds...")
                     import time
                     time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
                 else:
                     logger.error("Max retries reached. Failed to connect to Telegram API.")
                     raise
+                    
+            except telegram.error.NetworkError as e:
+                logger.error(f"Network error (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                if attempt < max_retries - 1:
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    import time
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    logger.error("Max retries reached due to network errors.")
+                    raise
+                    
             except Exception as e:
-                logger.error(f"Error running bot: {str(e)}")
+                logger.error(f"Unexpected error running bot: {str(e)}")
                 raise
 
-if __name__ == '__main__':
-    bot = CVBot(telegram_bot_token)
+if __name__ == "__main__":
+    # Validate environment variables
+    if not telegram_bot_token:
+        logger.error("TELEGRAM_BOT_TOKEN not set in .env file")
+        raise ValueError("Missing TELEGRAM_BOT_TOKEN")
+    
+    if not private_channel_id:
+        logger.error("PRIVATE_CHANNEL_ID not set in .env file")
+        raise ValueError("Missing PRIVATE_CHANNEL_ID")
+    
+    try:
+        # Validate that private_channel_id is a valid integer
+        channel_id_int = int(private_channel_id)
+        logger.info(f"✅ Private channel ID validated: {channel_id_int}")
+    except ValueError:
+        logger.error("PRIVATE_CHANNEL_ID must be a valid integer")
+        raise ValueError("PRIVATE_CHANNEL_ID must be a valid integer")
+    
+    logger.info(f"🤖 Bot token: {telegram_bot_token[:10]}...{telegram_bot_token[-4:]}")
+    logger.info(f"📢 Private channel ID: {private_channel_id}")
+    logger.info("Starting TestBot...")
+    bot = TestBot(telegram_bot_token)
     bot.run()
