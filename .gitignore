@@ -1,4 +1,4 @@
 backend/.env
-firebaseapi.j
+firebaseapikey.json
 __pycache__/
 *.pyc

@@ -239,11 +239,11 @@ private_channel_id = os.getenv('PRIVATE_CHANNEL_ID')
 
 # Initialize Firebase only if not already initialized
 logger = logging.getLogger(__name__)
-logger.info("Attempting to load Firebase credentials from: ../firebaseapikey.json")
+logger.info("Attempting to load Firebase credentials from: ./firebaseapikey.json")
 try:
     firebase_admin.get_app()
 except ValueError:
-    cred = credentials.Certificate("../firebaseapikey.json")
+    cred = credentials.Certificate("./firebaseapikey.json")
     firebase_admin.initialize_app(cred)
 db = firestore.client()
 logger.info("Firestore client obtained.")
