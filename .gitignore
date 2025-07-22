@@ -1,5 +1,4 @@
-.env
-firebaseapi.json=./firebaseapi.json
-
+backend/.env
+firebaseapi.j
 __pycache__/
 *.pyc
