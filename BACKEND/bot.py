@@ -237,16 +237,25 @@ load_dotenv()
 telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
 private_channel_id = os.getenv('PRIVATE_CHANNEL_ID')
 
-# Initialize Firebase only if not already initialized
+
 logger = logging.getLogger(__name__)
+
+# Create firebaseapikey.json from environment variable
+firebase_key = os.environ.get("FIREBASE_KEY")
+if firebase_key:
+    with open("firebaseapikey.json", "w") as f:
+        f.write(firebase_key)
+    logger.info("Firebase credentials file created: ./firebaseapikey.json")
+else:
+    logger.warning("FIREBASE_KEY environment variable is missing.")
+
+# Initialize Firebase
 logger.info("Attempting to load Firebase credentials from: ./firebaseapikey.json")
 try:
     firebase_admin.get_app()
 except ValueError:
     cred = credentials.Certificate("./firebaseapikey.json")
     firebase_admin.initialize_app(cred)
-db = firestore.client()
-logger.info("Firestore client obtained.")
 
 # Set up logging
 logging.basicConfig(
